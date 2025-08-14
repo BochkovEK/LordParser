@@ -1,0 +1,35 @@
+# Container
+sudo podman run -d --name selenium_chrome -p 4444:4444 --shm-size=2g docker.io/selenium/standalone-chrome:latest
+# docker run -d --name selenium_chrome -p 4444:4444 --shm-size=2g selenium/standalone-chrome
+
+sudo podman stop selenium_chrome
+sudo podman rm selenium_chrome
+
+# Service
+# sudo chown -R kolla:kolla /home/kolla/test
+# put in to /etc/systemd/system/lordfilm_bot.service
+# sudo systemctl daemon-reload
+# sudo systemctl start lordfilm_bot
+# sudo systemctl enable lordfilm_bot now
+
+# ------------------------------------------------------
+# не раб
+sudo podman run -d \
+  --name browserless_chrome \
+  -p 3000:3000 \
+  -e "CONCURRENT=10" \
+  -e "TIMEOUT=60000" \
+  -e "QUEUED=20" \
+  -e "DATA_DIR=/data/profile" \
+  -e "TOKEN=6R0W53R135510" \
+  -v /home/kolla/test:/data \
+  ghcr.io/browserless/chromium:latest
+
+# не раб
+sudo podman run -d \
+  --name browserless_chrome \
+  -p 3000:3000 \
+  -e "TIMEOUT=120000" \
+  -e "CONCURRENT_SESSIONS=5" \
+  browserless/chrome:latest
+

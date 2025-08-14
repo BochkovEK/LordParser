@@ -1,0 +1,16 @@
+python-telegram-bot==20.3
+beautifulsoup4==4.12.2
+requests==2.31.0
+soupsieve==2.5
+httpx==0.24.1
+selenium==4.34.2
+
+#---NEW----
+python-telegram-bot==20.3
+beautifulsoup4==4.12.2
+requests==2.31.0
+soupsieve==2.5
+httpx==0.24.1
+selenium==4.34.2
+apscheduler==3.10.1
+psycopg2-binary==2.9.9

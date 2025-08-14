@@ -1,0 +1,20 @@
+[Unit]
+Description=LordFilm Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=kolla
+Group=kolla
+WorkingDirectory=/home/kolla/test
+ExecStart=/bin/bash -c 'cd /home/kolla/test && /usr/bin/python3 -u bot.py'
+Restart=on-failure
+RestartSec=5s
+Environment="PYTHONUNBUFFERED=1"
+Environment="HOME=/home/kolla"
+Environment="PYTHONPATH=/home/kolla/test"
+StandardOutput=file:/home/kolla/test/bot.log
+StandardError=file:/home/kolla/test/bot.log
+
+[Install]
+WantedBy=multi-user.target
