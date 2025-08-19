@@ -14,7 +14,17 @@ source ./venv/bin/activate
 
 pip install -r requirements.txt -i https://pypi.org/simple/
 
-python3
+# Start create db
+python3 db_scheduler.py
+
+# Check DB
+sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "SELECT * FROM movies LIMIT 5;"
+
+# Clean DB
+# 1. Удалить только базу данных
+sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP DATABASE movie_db;"
+# 2. Удалить все таблицы
+sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 
 # Container
 sudo podman run -d --name selenium_chrome -p 4444:4444 --shm-size=2g docker.io/selenium/standalone-chrome:latest

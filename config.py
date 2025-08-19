@@ -4,6 +4,8 @@ DEFAULT_PAGES = 10
 DEFAULT_TOP_LIST = 10
 DEFAULT_YEAR = None
 DEFAULT_DEBUG = True
+YEAR_RANGE = "2000-2005" # Диапазон лет для наполнения базы данных по расписанию
+PARSE_PAGES = 5 # Количество страниц для парсинга фильмов определенного года
 
 # DB
 DB_NAME = "movie_db"

@@ -4,8 +4,8 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import psycopg2
 from config import (
-    DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DEFAULT_DEBUG, DEFAULT_URL,
-    PARSE_PAGES, YEAR_RANGE
+    DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT,
+    DEFAULT_PAGES, DEFAULT_YEAR, DEFAULT_DEBUG, DEFAULT_URL
 )
 from parser.lordfilm_parser import LordFilmParser
 
@@ -71,73 +71,6 @@ def init_db():
             conn.close()
 
 
-def clear_database():
-    """Полная очистка базы данных"""
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Удаляем все данные из таблицы
-        cursor.execute('TRUNCATE TABLE movies RESTART IDENTITY CASCADE')
-
-        conn.commit()
-        logger.info("Database cleared successfully")
-
-    except Exception as e:
-        logger.error(f"Error clearing database: {e}")
-        if conn:
-            conn.rollback()
-        raise
-    finally:
-        if conn:
-            conn.close()
-
-
-def parse_year_range():
-    """Парсинг для каждого года в диапазоне"""
-    all_movies_data = []
-
-    # Парсим диапазон годов
-    start_year, end_year = map(int, YEAR_RANGE.split('-'))
-
-    for year in range(start_year, end_year + 1):
-        logger.info(f"Parsing year: {year}")
-
-        parser = None
-        try:
-            # Создаем экземпляр парсера для конкретного года
-            parser = LordFilmParser(
-                base_url=DEFAULT_URL,
-                year=year,
-                debug=DEFAULT_DEBUG
-            )
-
-            # Получаем данные для указанного количества страниц
-            year_movies = parser._fetch_movies(PARSE_PAGES)
-
-            if year_movies:
-                all_movies_data.extend(year_movies)
-                logger.info(f"Year {year}: found {len(year_movies)} movies")
-            else:
-                logger.warning(f"Year {year}: no movies found")
-
-        except Exception as e:
-            logger.error(f"Error parsing year {year}: {e}")
-        finally:
-            if parser:
-                try:
-                    parser.cleanup()
-                except Exception as cleanup_error:
-                    logger.error(f"Error during parser cleanup for year {year}: {cleanup_error}")
-
-        # Небольшая задержка между годами
-        import time
-        time.sleep(2)
-
-    return all_movies_data
-
-
 def save_to_db(movies_data):
     """Сохранение данных в базу"""
     conn = None
@@ -166,8 +99,8 @@ def save_to_db(movies_data):
             ''', (
                 movie.get('title'),
                 movie.get('year'),
-                movie.get('country', ''),
-                movie.get('description', ''),
+                movie.get('country', ''),  # Добавьте парсинг страны если нужно
+                movie.get('description', ''),  # Добавьте парсинг описания если нужно
                 movie.get('rating_imdb'),
                 movie.get('rating_kp'),
                 movie.get('link', ''),
@@ -194,29 +127,38 @@ def save_to_db(movies_data):
             conn.close()
 
 
-def full_parsing_job():
-    """Полная задача парсинга с очисткой базы"""
+def scheduled_parsing():
+    """Задача для периодического выполнения"""
+    parser = None
     try:
-        logger.info("Starting full parsing job...")
-        logger.info(f"Year range: {YEAR_RANGE}")
-        logger.info(f"Pages per year: {PARSE_PAGES}")
+        logger.info("Starting scheduled parsing...")
 
-        # 1. Очищаем базу
-        clear_database()
+        # Создаем экземпляр парсера
+        parser = LordFilmParser(
+            base_url=DEFAULT_URL,
+            year=DEFAULT_YEAR,
+            debug=DEFAULT_DEBUG
+        )
 
-        # 2. Парсим все годы
-        all_movies_data = parse_year_range()
+        # Получаем данные
+        movies_data = parser._fetch_movies(DEFAULT_PAGES)
 
-        # 3. Сохраняем в базу
-        if all_movies_data:
-            save_to_db(all_movies_data)
-            logger.info(f"Full parsing completed. Total movies: {len(all_movies_data)}")
+        if movies_data:
+            save_to_db(movies_data)
+            logger.info(f"Parsing completed successfully. Processed {len(movies_data)} movies")
         else:
-            logger.warning("No movies data received from parsing")
+            logger.warning("No movies data received from parser")
 
     except Exception as e:
-        logger.error(f"Error during full parsing job: {e}")
+        logger.error(f"Error during parsing: {e}")
         raise
+    finally:
+        # Гарантированное закрытие парсера
+        if parser:
+            try:
+                parser.cleanup()
+            except Exception as cleanup_error:
+                logger.error(f"Error during parser cleanup: {cleanup_error}")
 
 
 def health_check():
@@ -244,12 +186,12 @@ if __name__ == "__main__":
     # Настройка планировщика
     scheduler = BlockingScheduler()
 
-    # Основная задача - полный парсинг каждые 24 часа
+    # Основная задача парсинга - каждые 6 часов
     scheduler.add_job(
-        full_parsing_job,
-        trigger=IntervalTrigger(hours=24),
+        scheduled_parsing,
+        trigger=IntervalTrigger(hours=6),
         next_run_time=datetime.now(),
-        name="full_parsing_job",
+        name="movie_parsing_job",
         max_instances=1
     )
 
@@ -262,9 +204,9 @@ if __name__ == "__main__":
 
     try:
         logger.info("Starting Movie Scheduler...")
-        logger.info(f"Year range: {YEAR_RANGE}")
-        logger.info(f"Pages per year: {PARSE_PAGES}")
-        logger.info("Full parsing will run every 24 hours")
+        logger.info(f"Will parse {DEFAULT_PAGES} pages every 6 hours")
+        logger.info(f"Target year: {DEFAULT_YEAR}")
+        logger.info(f"Debug mode: {DEFAULT_DEBUG}")
 
         scheduler.start()
 
