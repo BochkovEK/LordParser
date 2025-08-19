@@ -26,11 +26,11 @@ services:
       - "4444:4444"
     shm_size: "2g"
     restart: unless-stopped
-    environment:
-      - SE_NODE_MAX_SESSIONS=5
-      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
-      - SE_SCREEN_WIDTH=1920
-      - SE_SCREEN_HEIGHT=1080
+#    environment:
+#      - SE_NODE_MAX_SESSIONS=5
+#      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+#      - SE_SCREEN_WIDTH=1920
+#      - SE_SCREEN_HEIGHT=1080
     volumes:
       - /dev/shm:/dev/shm
     healthcheck:

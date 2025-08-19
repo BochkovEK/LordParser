@@ -1,14 +1,14 @@
 # Основные настройки парсера
 DEFAULT_URL = "https://mk.lordfilm17.ru"
 DEFAULT_PAGES = 10
-DEFAULT_TOP_LIST = 20
+DEFAULT_TOP_LIST = 10
 DEFAULT_YEAR = None
 DEFAULT_DEBUG = True
 
 # DB
 DB_NAME = "movie_db"
-DB_USER = "admin"
-DB_PASSWORD = "P@ssw0rd"
+DB_USER = "movie_user"
+DB_PASSWORD = "movie_password"
 DB_HOST = "localhost"
 DB_PORT = 5432
 
