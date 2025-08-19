@@ -1,3 +1,19 @@
+ssh EBochkov@10.224.151.215
+
+git clone https://Bochkov@github.com/BochkovEK/LordParser.git && \
+cd LordParser;
+git checkout dev
+
+sudo podman compose -f docker-compose.yml up -d
+
+#venv
+pip install virtualenv -i https://pypi.org/simple/
+export PATH="/usr/local/bin:$PATH"
+virtualenv --system-site-packages -p python ./venv
+source ./venv/bin/activate
+
+
+
 # Container
 sudo podman run -d --name selenium_chrome -p 4444:4444 --shm-size=2g docker.io/selenium/standalone-chrome:latest
 # docker run -d --name selenium_chrome -p 4444:4444 --shm-size=2g selenium/standalone-chrome
