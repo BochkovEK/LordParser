@@ -5,6 +5,13 @@ DEFAULT_TOP_LIST = 20
 DEFAULT_YEAR = None
 DEFAULT_DEBUG = True
 
+# DB
+DB_NAME = "movie_db"
+DB_USER = "admin"
+DB_PASSWORD = "P@ssw0rd"
+DB_HOST = "localhost"
+DB_PORT = 5432
+
 # Настройки бота
 BOT_TOKEN = "8414480350:AAH6NQvDbKhG9Iq40XGhWT524E_uG9u_QGA"
 # ADMIN_IDS = [881105387]  # ID администраторов
