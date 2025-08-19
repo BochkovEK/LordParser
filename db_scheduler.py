@@ -50,6 +50,7 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(title, year)
+            )
         ''')
 
         # Создание индексов для ускорения поиска
