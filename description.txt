@@ -44,7 +44,7 @@ sudo systemctl start movie-parser.service
 
 # Проверьте статус:
 sudo systemctl status movie-parser.service
-journalctl -u movie-parser.service -f
+sudo journalctl -u movie-parser.service -f
 
 # Мониторинг логов:
 tail -f /home/kolla/test/parser.log

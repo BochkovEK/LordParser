@@ -8,12 +8,12 @@ Wants=podman.service  # Если используете Podman
 Type=simple
 User=kolla
 Group=kolla
-WorkingDirectory=/home/kolla/test
+WorkingDirectory=/home/kolla/LordParser
 
-# Добавляем ожидание готовности PostgreSQL контейнера
-ExecStartPre=/bin/bash -c 'until pg_isready -h localhost -p 5432 -U movie_user; do sleep 2; done; echo "PostgreSQL is ready"'
+# Ожидание готовности контейнера movie_postgres
+ExecStartPre=/bin/bash -c 'until [ "$(podman inspect -f {{.State.Health.Status}} movie_postgres)" = "healthy" ]; do sleep 2; echo "Waiting for movie_postgres container to be healthy..."; done; echo "PostgreSQL container is healthy!"'
 
-ExecStart=/usr/bin/python3 -u parser_scheduler.py
+ExecStart=/bin/bash -c 'cd /home/kolla/LordParser && -u parser_scheduler.py
 Restart=on-failure
 RestartSec=30s
 Environment="PYTHONUNBUFFERED=1"

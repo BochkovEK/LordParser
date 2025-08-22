@@ -6,8 +6,8 @@ After=network.target
 Type=simple
 User=kolla
 Group=kolla
-WorkingDirectory=/home/kolla/test
-ExecStart=/bin/bash -c 'cd /home/kolla/test && /usr/bin/python3 -u bot.py'
+WorkingDirectory=/home/kolla/LordParser
+ExecStart=/bin/bash -c 'cd /home/kolla/LordParser && /usr/bin/python3 -u bot.py'
 Restart=on-failure
 RestartSec=5s
 Environment="PYTHONUNBUFFERED=1"
