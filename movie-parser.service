@@ -1,7 +1,6 @@
 [Unit]
 Description=LordFilm Movie Parser Scheduler
 After=network.target
-# Wants=docker.service  # Если используете Docker
 Wants=podman.service  # Если используете Podman
 
 [Service]
