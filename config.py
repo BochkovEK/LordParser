@@ -6,6 +6,7 @@ DEFAULT_YEAR = None
 DEFAULT_DEBUG = True
 YEAR_RANGE = "2016-2025" # Диапазон лет для наполнения базы данных по расписанию (2016 min)
 PARSE_PAGES = 50 # Количество страниц для парсинга фильмов определенного года
+NONE_RATING_KP = 6
 
 # DB
 DB_NAME = "movie_db"

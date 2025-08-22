@@ -18,6 +18,7 @@ DEFAULT_TOP_LIST = 20
 DEFAULT_YEAR = 2024
 DEFAULT_DEBUG = True
 BROWSERLESS_URL = "http://localhost:4444/wd/hub"
+NONE_RATING_KP = 6
 
 
 def apply_stealth_settings(chrome_options):
@@ -57,10 +58,12 @@ def human_like_delay():
 
 
 class LordFilmParser:
-    def __init__(self, base_url: str = DEFAULT_URL, year: int = DEFAULT_YEAR, debug: bool = DEFAULT_DEBUG):
+    def __init__(self, base_url: str = DEFAULT_URL, year: int = DEFAULT_YEAR, debug: bool = DEFAULT_DEBUG,
+                 none_rating_kp: int = NONE_RATING_KP):
         """Initialize the parser with Selenium WebDriver"""
         self.base_url = base_url
         self.year = year
+        self.none_rating_kp = none_rating_kp
         self.debug = debug
 
         # Настройка Browserless с параметрами скрытности
@@ -243,9 +246,11 @@ class LordFilmParser:
                         'rating_avg': (
                             round((rating_kp + rating_imdb) / 2, 1)
                             if rating_kp is not None and rating_imdb is not None  # Оба не None → среднее
-                            else rating_kp if rating_imdb is None else rating_imdb  # Один None → берём не-None
-                            if rating_kp is not None or rating_imdb is not None  # Хотя бы один не None
-                            else None  # Оба None → None
+                            else round((self.none_rating_kp + rating_imdb) / 2, 1)  # rating_kp None → считаем как 6 + imdb
+                            if rating_kp is None and rating_imdb is not None
+                            else rating_kp  # rating_imdb None → используем rating_kp
+                            if rating_kp is not None and rating_imdb is None
+                            else None
                         )
                     })
 

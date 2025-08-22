@@ -7,7 +7,7 @@ import psycopg2
 import time
 from config import (
     DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT,
-    DEFAULT_DEBUG, DEFAULT_URL,
+    DEFAULT_DEBUG, DEFAULT_URL, NONE_RATING_KP,
     PARSE_PAGES, YEAR_RANGE
 )
 from parser.lordfilm_parser import LordFilmParser
@@ -105,6 +105,7 @@ def parse_without_year_generator():
         parser = LordFilmParser(
             base_url=DEFAULT_URL,
             year=None,
+            none_rating_kp=NONE_RATING_KP,
             debug=DEFAULT_DEBUG
         )
 
@@ -141,6 +142,7 @@ def parse_year_range_generator():
             parser = LordFilmParser(
                 base_url=DEFAULT_URL,
                 year=year,
+                none_rating_kp=NONE_RATING_KP,
                 debug=DEFAULT_DEBUG
             )
 
