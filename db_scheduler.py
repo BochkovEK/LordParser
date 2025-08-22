@@ -16,7 +16,7 @@ from parser.lordfilm_parser import LordFilmParser
 logging.basicConfig(
     level=logging.DEBUG if DEFAULT_DEBUG else logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout  # Явно указываем вывод в stdout
+    # stream=sys.stdout  # Явно указываем вывод в stdout
 )
 logger = logging.getLogger('MovieScheduler')
 
@@ -361,9 +361,9 @@ if __name__ == "__main__":
     init_db()
 
     # Немедленный запуск для тестирования
-    logger.info("=== STARTING IMMEDIATE TEST RUN ===")
-    full_parsing_job()
-    logger.info("=== TEST RUN COMPLETED ===")
+    # logger.info("=== STARTING IMMEDIATE TEST RUN ===")
+    # full_parsing_job()
+    # logger.info("=== TEST RUN COMPLETED ===")
 
     # Настройка планировщика
     scheduler = BlockingScheduler()
