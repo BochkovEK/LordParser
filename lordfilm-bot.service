@@ -12,7 +12,7 @@ Restart=on-failure
 RestartSec=5s
 Environment="PYTHONUNBUFFERED=1"
 Environment="HOME=/home/kolla"
-Environment="PYTHONPATH=/home/kolla/test/LordParser"
+Environment="PYTHONPATH=/home/kolla/LordParser"
 StandardOutput=file:/home/kolla/LordParser/bot.log
 StandardError=file:/home/kolla/LordParser/bot.log
 

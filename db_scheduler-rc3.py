@@ -3,10 +3,9 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import psycopg2
-import time
 from config import (
     DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT,
-    DEFAULT_DEBUG, DEFAULT_URL,
+    DEFAULT_PAGES, DEFAULT_YEAR, DEFAULT_DEBUG, DEFAULT_URL,
     PARSE_PAGES, YEAR_RANGE
 )
 from parser.lordfilm_parser import LordFilmParser
@@ -96,29 +95,26 @@ def clear_database():
             conn.close()
 
 
-def parse_without_year_generator():
-    """Генератор для парсинга без указания года"""
+def parse_without_year():
+    """Парсинг без указания года (все фильмы подряд)"""
     parser = None
     try:
+        # Создаем экземпляр парсера без указания года
         parser = LordFilmParser(
             base_url=DEFAULT_URL,
-            year=None,
+            year=None,  # Без фильтра по году
             debug=DEFAULT_DEBUG
         )
 
         # Получаем данные для указанного количества страниц
         movies_data = parser._fetch_movies(PARSE_PAGES)
 
-        if movies_data:
-            logger.info(f"Parsing without year: yielding {len(movies_data)} movies")
-            for movie in movies_data:
-                yield movie
-        else:
-            logger.info("No movies found without year filter")
+        logger.info(f"Parsing without year: found {len(movies_data) if movies_data else 0} movies")
+        return movies_data
 
     except Exception as e:
         logger.error(f"Error parsing without year: {e}")
-        raise
+        return []
     finally:
         if parser:
             try:
@@ -127,8 +123,11 @@ def parse_without_year_generator():
                 logger.error(f"Error during parser cleanup: {cleanup_error}")
 
 
-def parse_year_range_generator():
-    """Генератор для парсинга диапазона годов"""
+def parse_year_range():
+    """Парсинг для каждого года в диапазоне"""
+    all_movies_data = []
+
+    # Парсим диапазон годов
     start_year, end_year = map(int, YEAR_RANGE.split('-'))
 
     for year in range(start_year, end_year + 1):
@@ -136,6 +135,7 @@ def parse_year_range_generator():
 
         parser = None
         try:
+            # Создаем экземпляр парсера для конкретного года
             parser = LordFilmParser(
                 base_url=DEFAULT_URL,
                 year=year,
@@ -143,12 +143,11 @@ def parse_year_range_generator():
             )
 
             # Получаем данные для указанного количества страниц
-            movies_data = parser._fetch_movies(PARSE_PAGES)
+            year_movies = parser._fetch_movies(PARSE_PAGES)
 
-            if movies_data:
-                logger.info(f"Year {year}: yielding {len(movies_data)} movies")
-                for movie in movies_data:
-                    yield movie
+            if year_movies:
+                all_movies_data.extend(year_movies)
+                logger.info(f"Year {year}: found {len(year_movies)} movies")
             else:
                 logger.warning(f"Year {year}: no movies found")
 
@@ -162,13 +161,17 @@ def parse_year_range_generator():
                     logger.error(f"Error during parser cleanup for year {year}: {cleanup_error}")
 
         # Небольшая задержка между годами
+        import time
         time.sleep(2)
 
+    return all_movies_data
 
-def save_single_batch(movies_batch):
-    """Сохранение одной пачки фильмов в базу"""
-    if not movies_batch:
-        return 0, 0
+
+def save_to_db(movies_data):
+    """Сохранение данных в базу"""
+    if not movies_data:
+        logger.warning("No movies data to save")
+        return
 
     conn = None
     try:
@@ -178,7 +181,7 @@ def save_single_batch(movies_batch):
         inserted_count = 0
         updated_count = 0
 
-        for movie in movies_batch:
+        for movie in movies_data:
             cursor.execute('''
                 INSERT INTO movies 
                 (title, year, country, description, imdb_rating, kp_rating, link, rating_avg, updated_at)
@@ -205,115 +208,116 @@ def save_single_batch(movies_batch):
                 datetime.now()
             ))
 
+            # Подсчет вставленных/обновленных записей
             if cursor.fetchone()[0]:
                 inserted_count += 1
             else:
                 updated_count += 1
 
         conn.commit()
-        return inserted_count, updated_count
+        logger.info(f"Saved to DB: {inserted_count} new, {updated_count} updated movies")
 
     except Exception as e:
-        logger.error(f"Error saving batch to database: {e}")
+        logger.error(f"Error saving to database: {e}")
         if conn:
             conn.rollback()
-        return 0, 0
+        raise
     finally:
         if conn:
             conn.close()
 
 
-def process_generator_with_batches(data_generator, batch_size=100, context=""):
-    """Обработка генератора с сохранением пачками"""
-    total_inserted = 0
-    total_updated = 0
-    current_batch = []
-    batch_count = 0
-
-    try:
-        for movie in data_generator:
-            current_batch.append(movie)
-
-            # Когда накопили пачку - сохраняем
-            if len(current_batch) >= batch_size:
-                batch_count += 1
-                inserted, updated = save_single_batch(current_batch)
-                total_inserted += inserted
-                total_updated += updated
-
-                logger.info(
-                    f"Batch {batch_count} ({context}): "
-                    f"saved {inserted} new, {updated} updated movies "
-                    f"(total: {total_inserted + total_updated})"
-                )
-
-                # Очищаем пачку и делаем небольшую паузу
-                current_batch = []
-                time.sleep(0.1)
-
-        # Сохраняем последнюю неполную пачку
-        if current_batch:
-            batch_count += 1
-            inserted, updated = save_single_batch(current_batch)
-            total_inserted += inserted
-            total_updated += updated
-
-            logger.info(
-                f"Final batch {batch_count} ({context}): "
-                f"saved {inserted} new, {updated} updated movies"
-            )
-
-        logger.info(
-            f"Completed {context}: {total_inserted} new, "
-            f"{total_updated} updated movies total"
-        )
-
-        return total_inserted + total_updated
-
-    except Exception as e:
-        # Пытаемся сохранить то, что успели набрать
-        if current_batch:
-            try:
-                inserted, updated = save_single_batch(current_batch)
-                total_inserted += inserted
-                total_updated += updated
-                logger.info(f"Saved partial batch due to error: {inserted + updated} movies")
-            except Exception as save_error:
-                logger.error(f"Error saving final batch: {save_error}")
-
-        raise
-
+# def full_parsing_job():
+#     """Полная задача парсинга с очисткой базы"""
+#     all_movies_data = []
+#
+#     try:
+#         logger.info("Starting full parsing job...")
+#         logger.info(f"Year range: {YEAR_RANGE}")
+#         logger.info(f"Pages per year: {PARSE_PAGES}")
+#
+#         # 1. Очищаем базу
+#         clear_database()
+#
+#         # 2. Парсим без указания года (все фильмы подряд)
+#         logger.info("Parsing without year filter...")
+#         movies_without_year = parse_without_year()
+#         if movies_without_year:
+#             all_movies_data.extend(movies_without_year)
+#             logger.info(f"Found {len(movies_without_year)} movies without year filter")
+#
+#         # 3. Парсим по годам из диапазона
+#         logger.info("Parsing year range...")
+#         movies_by_year = parse_year_range()
+#         if movies_by_year:
+#             all_movies_data.extend(movies_by_year)
+#             logger.info(f"Found {len(movies_by_year)} movies by year range")
+#
+#         # 4. Сохраняем в базу
+#         if all_movies_data:
+#             save_to_db(all_movies_data)
+#             logger.info(f"Full parsing completed. Total movies: {len(all_movies_data)}")
+#
+#             # Статистика по годам
+#             year_stats = {}
+#             for movie in all_movies_data:
+#                 year = movie.get('year')
+#                 if year:
+#                     year_stats[year] = year_stats.get(year, 0) + 1
+#
+#             logger.info("Movies by year:")
+#             for year, count in sorted(year_stats.items()):
+#                 logger.info(f"  {year}: {count} movies")
+#
+#         else:
+#             logger.warning("No movies data received from parsing")
+#
+#     except Exception as e:
+#         logger.error(f"Error during full parsing job: {e}")
+#         raise
 
 def full_parsing_job():
-    """Полная задача парсинга с использованием генераторов"""
-    total_saved = 0
-    batch_size = 100
+    """Полная задача парсинга с очисткой базы"""
+    all_movies_data = []
 
     try:
-        logger.info("Starting full parsing job with generators...")
+        logger.info("Starting full parsing job...")
 
         # 1. Очищаем базу
         clear_database()
 
         # 2. Парсим без указания года
-        logger.info("Processing movies without year filter...")
-        saved = process_generator_with_batches(
-            parse_without_year_generator(),
-            batch_size=batch_size,
-            context="without year"
-        )
-        total_saved += saved
+        logger.info("Parsing without year filter...")
+        movies_without_year = parse_without_year()
+        if movies_without_year:
+            all_movies_data.extend(movies_without_year)
+            logger.info(f"Found {len(movies_without_year)} movies without year filter")
 
         # 3. Парсим по годам из диапазона
-        logger.info("Processing year range...")
-        saved = process_generator_with_batches(
-            parse_year_range_generator(),
-            batch_size=batch_size,
-            context="year range"
-        )
-        total_saved += saved
+        logger.info("Parsing year range...")
+        movies_by_year = parse_year_range()
+        if movies_by_year:
+            all_movies_data.extend(movies_by_year)
+            logger.info(f"Found {len(movies_by_year)} movies by year range")
 
-        logger.info(f"Full parsing completed. Total movies saved: {total_saved}")
+        # 4. Сохраняем в базу (автоматически выбирается режим)
+        if all_movies_data:
+            logger.info(f"Starting save process for {len(all_movies_data)} movies...")
+            save_to_db(all_movies_data, batch_size=100)  # ← Вот здесь магия!
+
+            # Статистика
+            year_stats = {}
+            for movie in all_movies_data:
+                year = movie.get('year')
+                if year:
+                    year_stats[year] = year_stats.get(year, 0) + 1
+
+            logger.info("Movies by year:")
+            for year, count in sorted(year_stats.items()):
+                logger.info(f"  {year}: {count} movies")
+
+        else:
+            logger.warning("No movies data received from parsing")
 
     except Exception as e:
         logger.error(f"Error during full parsing job: {e}")
@@ -344,7 +348,7 @@ def health_check():
         logger.info(f"Health check: DB contains {count} movies")
         if year_stats:
             logger.info("Movies by year in DB:")
-            for year, count in year_stats[:10]:
+            for year, count in year_stats[:10]:  # Показываем топ-10 годов
                 logger.info(f"  {year}: {count} movies")
 
         return True
@@ -378,11 +382,11 @@ if __name__ == "__main__":
     )
 
     try:
-        logger.info("Starting Movie Scheduler with Generators...")
+        logger.info("Starting Movie Scheduler...")
         logger.info(f"Year range: {YEAR_RANGE}")
         logger.info(f"Pages per parsing: {PARSE_PAGES}")
-        logger.info(f"Batch size: 100 movies")
         logger.info("Full parsing will run every 24 hours")
+        logger.info("Includes: 1) All movies without year filter 2) Movies by year range")
 
         scheduler.start()
 
