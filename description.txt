@@ -14,7 +14,7 @@ source ./venv/bin/activate
 
 pip install -r requirements.txt -i https://pypi.org/simple/
 
-# Start create db
+# [TEST START] Start create db
 python3 db_scheduler.py
 
 # Check DB
@@ -26,6 +26,33 @@ sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP DATA
 # 2. Удалить все таблицы
 sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 
+# Запуск scheduler DB
+# --------------------
+# Скопировать конфиг сервиса
+sudo cd ./movie-parser.service ./.service /etc/systemd/system/
+
+# Перезагрузите systemd:
+sudo systemctl daemon-reload
+Включите автозагрузку:
+
+# Включить сервис:
+sudo systemctl enable movie-parser.service
+
+# Запустите сервис:
+sudo systemctl start movie-parser.service
+
+# Проверьте статус:
+sudo systemctl status movie-parser.service
+journalctl -u movie-parser.service -f
+
+# Мониторинг логов:
+tail -f /home/kolla/test/parser.log
+
+# Остановить сервис:
+sudo systemctl stop movie-parser.service
+
+# Запуск lordfilm Bot
+# --------------------
 # Скопировать конфиг сервиса
 sudo cd ./lordfilm_bot.service /etc/systemd/system/
 
@@ -56,6 +83,7 @@ sudo journalctl -u lordfilm_bot -n 50
 # Посмотреть логи с определенного времени
 sudo journalctl -u lordfilm_bot --since "2024-01-01 00:00:00"
 
+#------------------------------------------------------
 #------------------------------------------------------
 
 # Container

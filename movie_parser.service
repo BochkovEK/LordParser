@@ -1,0 +1,27 @@
+[Unit]
+Description=LordFilm Movie Parser Scheduler
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=kolla
+Group=kolla
+WorkingDirectory=/home/kolla/test
+ExecStart=/usr/bin/python3 -u parser_scheduler.py
+Restart=on-failure
+RestartSec=30s
+Environment="PYTHONUNBUFFERED=1"
+Environment="HOME=/home/kolla"
+Environment="PYTHONPATH=/home/kolla/test"
+StandardOutput=file:/home/kolla/test/parser.log
+StandardError=file:/home/kolla/test/parser.log
+
+# Защита и ограничения
+ProtectSystem=strict
+ReadWritePaths=/home/kolla/test
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
