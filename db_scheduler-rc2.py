@@ -4,8 +4,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import psycopg2
 from config import (
-    DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT,
-    DEFAULT_PAGES, DEFAULT_YEAR, DEFAULT_DEBUG, DEFAULT_URL,
+    DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DEFAULT_DEBUG, DEFAULT_URL,
     PARSE_PAGES, YEAR_RANGE
 )
 from parser.lordfilm_parser import LordFilmParser
@@ -95,34 +94,6 @@ def clear_database():
             conn.close()
 
 
-def parse_without_year():
-    """Парсинг без указания года (все фильмы подряд)"""
-    parser = None
-    try:
-        # Создаем экземпляр парсера без указания года
-        parser = LordFilmParser(
-            base_url=DEFAULT_URL,
-            year=None,  # Без фильтра по году
-            debug=DEFAULT_DEBUG
-        )
-
-        # Получаем данные для указанного количества страниц
-        movies_data = parser._fetch_movies(PARSE_PAGES)
-
-        logger.info(f"Parsing without year: found {len(movies_data) if movies_data else 0} movies")
-        return movies_data
-
-    except Exception as e:
-        logger.error(f"Error parsing without year: {e}")
-        return []
-    finally:
-        if parser:
-            try:
-                parser.cleanup()
-            except Exception as cleanup_error:
-                logger.error(f"Error during parser cleanup: {cleanup_error}")
-
-
 def parse_year_range():
     """Парсинг для каждого года в диапазоне"""
     all_movies_data = []
@@ -169,10 +140,6 @@ def parse_year_range():
 
 def save_to_db(movies_data):
     """Сохранение данных в базу"""
-    if not movies_data:
-        logger.warning("No movies data to save")
-        return
-
     conn = None
     try:
         conn = get_db_connection()
@@ -229,8 +196,6 @@ def save_to_db(movies_data):
 
 def full_parsing_job():
     """Полная задача парсинга с очисткой базы"""
-    all_movies_data = []
-
     try:
         logger.info("Starting full parsing job...")
         logger.info(f"Year range: {YEAR_RANGE}")
@@ -239,36 +204,13 @@ def full_parsing_job():
         # 1. Очищаем базу
         clear_database()
 
-        # 2. Парсим без указания года (все фильмы подряд)
-        logger.info("Parsing without year filter...")
-        movies_without_year = parse_without_year()
-        if movies_without_year:
-            all_movies_data.extend(movies_without_year)
-            logger.info(f"Found {len(movies_without_year)} movies without year filter")
+        # 2. Парсим все годы
+        all_movies_data = parse_year_range()
 
-        # 3. Парсим по годам из диапазона
-        logger.info("Parsing year range...")
-        movies_by_year = parse_year_range()
-        if movies_by_year:
-            all_movies_data.extend(movies_by_year)
-            logger.info(f"Found {len(movies_by_year)} movies by year range")
-
-        # 4. Сохраняем в базу
+        # 3. Сохраняем в базу
         if all_movies_data:
             save_to_db(all_movies_data)
             logger.info(f"Full parsing completed. Total movies: {len(all_movies_data)}")
-
-            # Статистика по годам
-            year_stats = {}
-            for movie in all_movies_data:
-                year = movie.get('year')
-                if year:
-                    year_stats[year] = year_stats.get(year, 0) + 1
-
-            logger.info("Movies by year:")
-            for year, count in sorted(year_stats.items()):
-                logger.info(f"  {year}: {count} movies")
-
         else:
             logger.warning("No movies data received from parsing")
 
@@ -285,25 +227,9 @@ def health_check():
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM movies')
         count = cursor.fetchone()[0]
-
-        # Статистика по годам
-        cursor.execute('''
-            SELECT year, COUNT(*) 
-            FROM movies 
-            WHERE year IS NOT NULL 
-            GROUP BY year 
-            ORDER BY year DESC
-        ''')
-        year_stats = cursor.fetchall()
-
         conn.close()
 
         logger.info(f"Health check: DB contains {count} movies")
-        if year_stats:
-            logger.info("Movies by year in DB:")
-            for year, count in year_stats[:10]:  # Показываем топ-10 годов
-                logger.info(f"  {year}: {count} movies")
-
         return True
 
     except Exception as e:
@@ -337,9 +263,8 @@ if __name__ == "__main__":
     try:
         logger.info("Starting Movie Scheduler...")
         logger.info(f"Year range: {YEAR_RANGE}")
-        logger.info(f"Pages per parsing: {PARSE_PAGES}")
+        logger.info(f"Pages per year: {PARSE_PAGES}")
         logger.info("Full parsing will run every 24 hours")
-        logger.info("Includes: 1) All movies without year filter 2) Movies by year range")
 
         scheduler.start()
 

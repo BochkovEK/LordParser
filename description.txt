@@ -26,6 +26,38 @@ sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP DATA
 # 2. Удалить все таблицы
 sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 
+# Скопировать конфиг сервиса
+sudo cd ./lordfilm_bot.service /etc/systemd/system/
+
+# Перезагрузить конфигурацию systemd (если вносили изменения)
+sudo systemctl daemon-reload
+
+# Запустить бота
+sudo systemctl start lordfilm_bot
+
+# Остановить бота
+sudo systemctl stop lordfilm_bot
+
+# Перезапустить бота
+sudo systemctl restart lordfilm_bot
+
+# Проверить статус бота
+sudo systemctl status lordfilm_bot
+
+# Включить автозагрузку при старте системы
+sudo systemctl enable lordfilm_bot
+
+# Посмотреть логи в реальном времени
+sudo journalctl -u lordfilm_bot -f
+
+# Посмотреть последние логи
+sudo journalctl -u lordfilm_bot -n 50
+
+# Посмотреть логи с определенного времени
+sudo journalctl -u lordfilm_bot --since "2024-01-01 00:00:00"
+
+#------------------------------------------------------
+
 # Container
 sudo podman run -d --name selenium_chrome -p 4444:4444 --shm-size=2g docker.io/selenium/standalone-chrome:latest
 # docker run -d --name selenium_chrome -p 4444:4444 --shm-size=2g selenium/standalone-chrome
