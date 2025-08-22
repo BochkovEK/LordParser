@@ -1,15 +1,9 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 import psycopg2
-import json
-from config import (  # Импортируем все необходимые константы
+from config import (
     BOT_TOKEN,
-    DEFAULT_URL,
-    DEFAULT_PAGES,
-    DEFAULT_TOP_LIST,
-    DEFAULT_YEAR,
-    DEFAULT_DEBUG,
     DB_NAME,
     DB_USER,
     DB_PASSWORD,
@@ -29,11 +23,8 @@ class BotConfig:
     """Класс для хранения конфигурации бота"""
 
     def __init__(self):
-        self.url = DEFAULT_URL
-        self.pages = DEFAULT_PAGES
-        self.top_list = DEFAULT_TOP_LIST
-        self.year = DEFAULT_YEAR
-        self.debug = DEFAULT_DEBUG
+        self.top_size = 10  # Размер топа по умолчанию
+        self.selected_year = None  # Выбранный год
 
 
 def get_db_connection():
@@ -49,169 +40,175 @@ def get_db_connection():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start"""
+    keyboard = [
+        ['🎬 Top', '📊 Stats'],
+        ['🔍 Search']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
     await update.message.reply_text(
-        "🎬 Бот для поиска фильмов из базы данных\n\n"
-        "Доступные команды:\n"
-        "/top - топ фильмов по рейтингу\n"
-        "/year <год> - фильмы по году\n"
-        "/search <название> - поиск по названию\n"
-        "/stats - статистика базы\n"
-        "/config - текущие настройки\n"
-        "/set_top <N> - размер топа\n"
-        "/set_year <год> - фильтр по году\n"
-        "/set_debug <on/off> - режим отладки"
+        "🎬 Добро пожаловать в Movie Bot!\n\n"
+        "Выберите действие:\n"
+        "• 🎬 Top - получить топ фильмов\n"
+        "• 📊 Stats - статистика базы данных\n"
+        "• 🔍 Search - поиск фильмов по названию\n\n"
+        "Или просто введите /search <название> для поиска",
+        reply_markup=reply_markup
     )
 
 
-async def show_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Показать текущую конфигурацию"""
-    config = context.bot_data.setdefault('config', BotConfig())
-    response = (
-        f"⚙️ Текущие настройки:\n"
-        f"• Топ: {config.top_list}\n"
-        f"• Год: {config.year or 'не задан'}\n"
-        f"• Отладка: {'вкл' if config.debug else 'выкл'}\n"
-        f"• База данных: {DB_NAME}@{DB_HOST}"
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик текстовых сообщений (кнопок)"""
+    text = update.message.text
+
+    if text == '🎬 Top':
+        await show_year_buttons(update, context)
+    elif text == '📊 Stats':
+        await show_stats(update, context)
+    elif text == '🔍 Search':
+        await update.message.reply_text(
+            "Введите название фильма для поиска:\nНапример: 'Матрица' или '/search Матрица'"
+        )
+
+
+async def show_year_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показать кнопки выбора года"""
+    keyboard = []
+
+    # Кнопка "За все года"
+    keyboard.append([InlineKeyboardButton("За все года", callback_data='year_all')])
+
+    # Создаем кнопки для годов с 1990 по 2025
+    years = list(range(1990, 2026))
+    row = []
+
+    for year in years:
+        row.append(InlineKeyboardButton(str(year), callback_data=f'year_{year}'))
+        if len(row) == 4:  # 4 кнопки в строке
+            keyboard.append(row)
+            row = []
+
+    if row:  # Добавляем последнюю неполную строку
+        keyboard.append(row)
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            "📅 Выберите год:",
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            "📅 Выберите год:",
+            reply_markup=reply_markup
+        )
+
+
+async def show_top_size_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE, year: str) -> None:
+    """Показать кнопки выбора размера топа"""
+    query = update.callback_query
+    await query.answer()
+
+    # Сохраняем выбранный год в контексте
+    context.user_data['selected_year'] = year
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Топ 10", callback_data=f'top_10_{year}'),
+            InlineKeyboardButton("Топ 25", callback_data=f'top_25_{year}'),
+            InlineKeyboardButton("Топ 50", callback_data=f'top_50_{year}')
+        ],
+        [
+            InlineKeyboardButton("Топ 100", callback_data=f'top_100_{year}'),
+            InlineKeyboardButton("← Назад к выбору года", callback_data='back_to_years')
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    year_text = "все года" if year == "all" else f"{year} год"
+    await query.edit_message_text(
+        f"📊 Выберите размер топа для {year_text}:",
+        reply_markup=reply_markup
     )
 
-    await update.message.reply_text(response)
+
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик callback запросов от inline кнопок"""
+    query = update.callback_query
+    data = query.data
+
+    if data.startswith('year_'):
+        year = data.split('_')[1]
+        await show_top_size_buttons(update, context, year)
+
+    elif data.startswith('top_'):
+        # Разбираем данные: top_10_1999 → size=10, year=1999
+        parts = data.split('_')
+        top_size = int(parts[1])
+        year = parts[2]
+
+        await query.answer()
+        await get_top_movies(update, context, top_size, year)
+
+    elif data == 'back_to_years':
+        await show_year_buttons(update, context)
 
 
-async def set_parameter(update: Update, context: ContextTypes.DEFAULT_TYPE, param_name: str) -> None:
-    """Общий обработчик для установки параметров"""
-    if not context.args:
-        await update.message.reply_text(f"Укажите значение для {param_name}")
-        return
-
-    config = context.bot_data.setdefault('config', BotConfig())
-    value = context.args[0]
-
-    try:
-        if param_name == 'top':
-            config.top_list = int(value)
-        elif param_name == 'year':
-            config.year = int(value) if value.lower() != 'none' else None
-        elif param_name == 'debug':
-            config.debug = value.lower() == 'on'
-
-        await update.message.reply_text(f"✅ Параметр {param_name} установлен: {value}")
-    except (ValueError, TypeError):
-        await update.message.reply_text("❌ Некорректное значение")
-
-
-async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Получить топ фильмов из базы данных"""
-    config = context.bot_data.setdefault('config', BotConfig())
+async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE, top_size: int, year: str) -> None:
+    """Получить топ фильмов"""
+    query = update.callback_query
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Получаем топ фильмов по среднему рейтингу
-        cursor.execute('''
-            SELECT title, year, imdb_rating, kp_rating, rating_avg, link
-            FROM movies 
-            WHERE imdb_rating IS NOT NULL AND kp_rating IS NOT NULL
-            ORDER BY rating_avg DESC 
-            LIMIT %s
-        ''', (config.top_list,))
+        # Формируем запрос в зависимости от выбранного года
+        if year == 'all':
+            sql_query = '''
+                SELECT title, year, imdb_rating, kp_rating, rating_avg, link
+                FROM movies 
+                WHERE imdb_rating IS NOT NULL AND kp_rating IS NOT NULL
+                ORDER BY rating_avg DESC 
+                LIMIT %s
+            '''
+            params = (top_size,)
+            year_text = "за все года"
+        else:
+            sql_query = '''
+                SELECT title, year, imdb_rating, kp_rating, rating_avg, link
+                FROM movies 
+                WHERE year = %s AND imdb_rating IS NOT NULL AND kp_rating IS NOT NULL
+                ORDER BY rating_avg DESC 
+                LIMIT %s
+            '''
+            params = (int(year), top_size)
+            year_text = f"за {year} год"
 
+        cursor.execute(sql_query, params)
         movies = cursor.fetchall()
         conn.close()
 
         if not movies:
-            await update.message.reply_text("📭 В базе нет фильмов или данные отсутствуют")
+            await query.edit_message_text(f"📭 Фильмы {year_text} не найдены")
             return
 
-        response = "🏆 Топ фильмов по рейтингу:\n\n"
+        response = f"🏆 Топ-{top_size} фильмов {year_text}:\n\n"
         for i, (title, year, imdb, kp, avg, link) in enumerate(movies, 1):
-            response += f"{i}. {title} ({year})\n"
+            response += f"{i}. 🎬 {title} ({year})\n"
             response += f"   ★ IMDb: {imdb or 'N/A'} | КП: {kp or 'N/A'} | Средний: {avg or 'N/A'}\n"
             response += f"   🔗 {link}\n\n"
 
-        await update.message.reply_text(response[:4000])  # Ограничение Telegram
+        # Добавляем кнопку "Выбрать другой топ"
+        keyboard = [[InlineKeyboardButton("← Выбрать другой топ", callback_data='back_to_years')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await query.edit_message_text(response[:4000], reply_markup=reply_markup, disable_web_page_preview=True)
 
     except Exception as e:
         logger.error(f"Ошибка получения топа: {e}")
-        await update.message.reply_text(f"❌ Ошибка доступа к базе: {str(e)}")
-
-
-async def get_movies_by_year(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Получить фильмы по году"""
-    if not context.args:
-        await update.message.reply_text("Укажите год: /year <год>")
-        return
-
-    try:
-        year = int(context.args[0])
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT title, imdb_rating, kp_rating, rating_avg, link
-            FROM movies 
-            WHERE year = %s
-            ORDER BY rating_avg DESC NULLS LAST
-            LIMIT 20
-        ''', (year,))
-
-        movies = cursor.fetchall()
-        conn.close()
-
-        if not movies:
-            await update.message.reply_text(f"📭 Фильмы за {year} год не найдены")
-            return
-
-        response = f"🎬 Фильмы {year} года:\n\n"
-        for i, (title, imdb, kp, avg, link) in enumerate(movies, 1):
-            response += f"{i}. {title}\n"
-            response += f"   ★ IMDb: {imdb or 'N/A'} | КП: {kp or 'N/A'} | Средний: {avg or 'N/A'}\n\n"
-
-        await update.message.reply_text(response[:4000])
-
-    except ValueError:
-        await update.message.reply_text("❌ Укажите корректный год")
-    except Exception as e:
-        logger.error(f"Ошибка поиска по году: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
-
-async def search_movies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Поиск фильмов по названию"""
-    if not context.args:
-        await update.message.reply_text("Укажите название: /search <название>")
-        return
-
-    search_query = ' '.join(context.args)
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            SELECT title, year, imdb_rating, kp_rating, rating_avg, link
-            FROM movies 
-            WHERE title ILIKE %s
-            ORDER BY rating_avg DESC NULLS LAST
-            LIMIT 15
-        ''', (f'%{search_query}%',))
-
-        movies = cursor.fetchall()
-        conn.close()
-
-        if not movies:
-            await update.message.reply_text(f"🔍 Фильмы по запросу '{search_query}' не найдены")
-            return
-
-        response = f"🔍 Результаты поиска '{search_query}':\n\n"
-        for i, (title, year, imdb, kp, avg, link) in enumerate(movies, 1):
-            response += f"{i}. {title} ({year})\n"
-            response += f"   ★ IMDb: {imdb or 'N/A'} | КП: {kp or 'N/A'} | Средний: {avg or 'N/A'}\n\n"
-
-        await update.message.reply_text(response[:4000])
-
-    except Exception as e:
-        logger.error(f"Ошибка поиска: {e}")
-        await update.message.reply_text(f"❌ Ошибка поиска: {str(e)}")
+        await query.edit_message_text("❌ Ошибка при получении данных из базы")
 
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -254,17 +251,21 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         for year, count in top_years:
             response += f"  {year}: {count} фильмов\n"
 
-        response += f"\n🔄 База обновляется автоматически каждые 24 часа"
-
         await update.message.reply_text(response)
 
     except Exception as e:
         logger.error(f"Ошибка получения статистики: {e}")
-        await update.message.reply_text(f"❌ Ошибка статистики: {str(e)}")
+        await update.message.reply_text("❌ Ошибка при получении статистики")
 
 
-async def get_random_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Получить случайный фильм"""
+async def search_movies(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Поиск фильмов по названию"""
+    search_query = ' '.join(context.args) if context.args else update.message.text
+
+    if not search_query or search_query.strip() == '🔍 Search':
+        await update.message.reply_text("Введите название фильма для поиска:\nНапример: 'Матрица'")
+        return
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -272,33 +273,29 @@ async def get_random_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         cursor.execute('''
             SELECT title, year, imdb_rating, kp_rating, rating_avg, link
             FROM movies 
-            WHERE imdb_rating IS NOT NULL 
-            ORDER BY RANDOM() 
-            LIMIT 1
-        ''')
+            WHERE title ILIKE %s
+            ORDER BY rating_avg DESC NULLS LAST
+            LIMIT 15
+        ''', (f'%{search_query}%',))
 
-        movie = cursor.fetchone()
+        movies = cursor.fetchall()
         conn.close()
 
-        if not movie:
-            await update.message.reply_text("📭 В базе нет фильмов")
+        if not movies:
+            await update.message.reply_text(f"🔍 Фильмы по запросу '{search_query}' не найдены")
             return
 
-        title, year, imdb, kp, avg, link = movie
-        response = (
-            f"🎲 Случайный фильм:\n\n"
-            f"🎬 {title} ({year})\n"
-            f"★ IMDb: {imdb or 'N/A'}\n"
-            f"★ КиноПоиск: {kp or 'N/A'}\n"
-            f"★ Средний: {avg or 'N/A'}\n"
-            f"🔗 {link}"
-        )
+        response = f"🔍 Результаты поиска '{search_query}':\n\n"
+        for i, (title, year, imdb, kp, avg, link) in enumerate(movies, 1):
+            response += f"{i}. 🎬 {title} ({year})\n"
+            response += f"   ★ IMDb: {imdb or 'N/A'} | КП: {kp or 'N/A'} | Средний: {avg or 'N/A'}\n"
+            response += f"   🔗 {link}\n\n"
 
-        await update.message.reply_text(response)
+        await update.message.reply_text(response[:4000], disable_web_page_preview=True)
 
     except Exception as e:
-        logger.error(f"Ошибка случайного фильма: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+        logger.error(f"Ошибка поиска: {e}")
+        await update.message.reply_text("❌ Ошибка при поиске фильмов")
 
 
 def main() -> None:
@@ -306,24 +303,13 @@ def main() -> None:
     try:
         application = Application.builder().token(BOT_TOKEN).build()
 
-        # Регистрация обработчиков команд
-        handlers = [
-            CommandHandler("start", start),
-            CommandHandler("top", get_top_movies),
-            CommandHandler("year", get_movies_by_year),
-            CommandHandler("search", search_movies),
-            CommandHandler("stats", show_stats),
-            CommandHandler("random", get_random_movie),
-            CommandHandler("set_top", lambda u, c: set_parameter(u, c, 'top')),
-            CommandHandler("set_year", lambda u, c: set_parameter(u, c, 'year')),
-            CommandHandler("set_debug", lambda u, c: set_parameter(u, c, 'debug')),
-            CommandHandler("config", show_config),
-        ]
+        # Регистрация обработчиков
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("search", search_movies))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        application.add_handler(CallbackQueryHandler(handle_callback_query))
 
-        for handler in handlers:
-            application.add_handler(handler)
-
-        logging.info("Бот запущен и работает с базой данных")
+        logging.info("Бот запущен с обновленным интерфейсом")
         application.run_polling()
 
     except Exception as e:
