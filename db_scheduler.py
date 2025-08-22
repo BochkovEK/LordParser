@@ -360,6 +360,11 @@ if __name__ == "__main__":
     # Инициализация БД
     init_db()
 
+    # Немедленный запуск для тестирования
+    logger.info("=== STARTING IMMEDIATE TEST RUN ===")
+    full_parsing_job()
+    logger.info("=== TEST RUN COMPLETED ===")
+
     # Настройка планировщика
     scheduler = BlockingScheduler()
 
