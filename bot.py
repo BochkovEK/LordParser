@@ -67,7 +67,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await show_stats(update, context)
     elif text == '🔍 Search':
         await update.message.reply_text(
-            "Введите название фильма для поиска:\nНапример: 'Матрица' или '/search Матрица'"
+            "Введите название фильма для поиска:\nНапример: '/search Матрица'"
         )
 
 
