@@ -1,7 +1,7 @@
 [Unit]
 Description=LordFilm Movie Parser Scheduler
 After=network.target
-Wants=podman.service
+Wants=podman.servico
 
 [Service]
 Type=simple
