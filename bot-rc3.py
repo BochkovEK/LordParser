@@ -155,36 +155,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == 'back_to_years':
         await show_year_buttons(update, context)
 
-    elif data.startswith('page_'):
-        # Обработка пагинации: page_1_50_1999
-        parts = data.split('_')
-        page = int(parts[1])
-        top_size = int(parts[2])
-        year = parts[3]
-        await show_top_page(update, context, page, top_size, year)
-
 
 async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE, top_size: int, year: str) -> None:
-    """Получить топ фильмов и показать первую страницу"""
+    """Получить топ фильмов"""
     query = update.callback_query
-    await query.answer()
-
-    # Сохраняем параметры в context для пагинации
-    context.user_data['current_top'] = {
-        'size': top_size,
-        'year': year,
-        'page': 0  # Начинаем с первой страницы
-    }
-
-    await show_top_page(update, context, 0, top_size, year)
-
-
-async def show_top_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int, top_size: int,
-                        year: str) -> None:
-    """Показать страницу с топом фильмов"""
-    query = update.callback_query
-    if query:
-        await query.answer()
 
     try:
         conn = get_db_connection()
@@ -217,71 +191,24 @@ async def show_top_page(update: Update, context: ContextTypes.DEFAULT_TYPE, page
         conn.close()
 
         if not movies:
-            if query:
-                await query.edit_message_text(f"📭 Фильмы {year_text} не найдены")
-            else:
-                await update.message.reply_text(f"📭 Фильмы {year_text} не найдены")
+            await query.edit_message_text(f"📭 Фильмы {year_text} не найдены")
             return
 
-        # Настройки пагинации
-        movies_per_page = 10  # По 10 фильмов на страницу
-        total_pages = (len(movies) - 1) // movies_per_page + 1
-        current_page = min(page, total_pages - 1)  # Не выходим за границы
-
-        # Получаем фильмы для текущей страницы
-        start_idx = current_page * movies_per_page
-        end_idx = min(start_idx + movies_per_page, len(movies))
-        page_movies = movies[start_idx:end_idx]
-
-        # Формируем сообщение
-        response = f"🏆 Топ-{top_size} фильмов {year_text}\n"
-        response += f"📄 Страница {current_page + 1}/{total_pages}\n\n"
-
-        for i, (title, year, imdb, kp, avg, link) in enumerate(page_movies, start_idx + 1):
+        response = f"🏆 Топ-{top_size} фильмов {year_text}:\n\n"
+        for i, (title, year, imdb, kp, avg, link) in enumerate(movies, 1):
             response += f"{i}. 🎬 {title} ({year})\n"
             response += f"   ★ IMDb: {imdb or 'N/A'} | КП: {kp or 'N/A'} | Средний: {avg or 'N/A'}\n"
             response += f"   🔗 {link}\n\n"
 
-        # Создаем клавиатуру для пагинации
-        keyboard = []
-
-        # Кнопки навигации
-        nav_buttons = []
-        if current_page > 0:
-            nav_buttons.append(InlineKeyboardButton("← Назад",
-                                                    callback_data=f"page_{current_page - 1}_{top_size}_{year}"))
-
-        if current_page < total_pages - 1:
-            nav_buttons.append(InlineKeyboardButton("Вперед →",
-                                                    callback_data=f"page_{current_page + 1}_{top_size}_{year}"))
-
-        if nav_buttons:
-            keyboard.append(nav_buttons)
-
-        # Кнопка возврата
-        keyboard.append([InlineKeyboardButton("← Выбрать другой топ", callback_data='back_to_years')])
-
+        # Добавляем кнопку "Выбрать другой топ"
+        keyboard = [[InlineKeyboardButton("← Выбрать другой топ", callback_data='back_to_years')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        if query:
-            await query.edit_message_text(
-                response[:4000],
-                reply_markup=reply_markup,
-                disable_web_page_preview=True
-            )
-        else:
-            await update.message.reply_text(
-                response[:4000],
-                reply_markup=reply_markup,
-                disable_web_page_preview=True
-            )
+        await query.edit_message_text(response[:4000], reply_markup=reply_markup, disable_web_page_preview=True)
 
     except Exception as e:
         logger.error(f"Ошибка получения топа: {e}")
-        if query:
-            await query.edit_message_text("❌ Ошибка при получении данных из базы")
-        else:
-            await update.message.reply_text("❌ Ошибка при получении данных из базы")
+        await query.edit_message_text("❌ Ошибка при получении данных из базы")
 
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
