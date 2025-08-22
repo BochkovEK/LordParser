@@ -12,9 +12,9 @@ Restart=on-failure
 RestartSec=5s
 Environment="PYTHONUNBUFFERED=1"
 Environment="HOME=/home/kolla"
-Environment="PYTHONPATH=/home/kolla/test"
-StandardOutput=file:/home/kolla/test/bot.log
-StandardError=file:/home/kolla/test/bot.log
+Environment="PYTHONPATH=/home/kolla/test/LordParser"
+StandardOutput=file:/home/kolla/LordParser/bot.log
+StandardError=file:/home/kolla/LordParser/bot.log
 
 [Install]
 WantedBy=multi-user.target

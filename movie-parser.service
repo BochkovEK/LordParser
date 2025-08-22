@@ -18,13 +18,13 @@ Restart=on-failure
 RestartSec=30s
 Environment="PYTHONUNBUFFERED=1"
 Environment="HOME=/home/kolla"
-Environment="PYTHONPATH=/home/kolla/test"
-StandardOutput=file:/home/kolla/test/parser.log
-StandardError=file:/home/kolla/test/parser.log
+Environment="PYTHONPATH=/home/kolla/LordParser/"
+StandardOutput=file:/home/kolla/LordParser/parser.log
+StandardError=file:/home/kolla/LordParser/parser.log
 
 # Защита и ограничения
 ProtectSystem=strict
-ReadWritePaths=/home/kolla/test
+ReadWritePaths=/home/kolla/LordParser/
 NoNewPrivileges=yes
 PrivateTmp=yes
 
