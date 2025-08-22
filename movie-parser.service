@@ -1,13 +1,18 @@
 [Unit]
 Description=LordFilm Movie Parser Scheduler
-After=network.target postgresql.service
-Requires=postgresql.service
+After=network.target
+# Wants=docker.service  # Если используете Docker
+Wants=podman.service  # Если используете Podman
 
 [Service]
 Type=simple
 User=kolla
 Group=kolla
 WorkingDirectory=/home/kolla/test
+
+# Добавляем ожидание готовности PostgreSQL контейнера
+ExecStartPre=/bin/bash -c 'until pg_isready -h localhost -p 5432 -U movie_user; do sleep 2; done; echo "PostgreSQL is ready"'
+
 ExecStart=/usr/bin/python3 -u parser_scheduler.py
 Restart=on-failure
 RestartSec=30s

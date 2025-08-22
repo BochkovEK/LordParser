@@ -30,7 +30,7 @@ sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP SCHE
 # --------------------
 # Скопировать конфиг сервиса
 cd ~/LordParser
-sudo cp movie_parser.service /etc/systemd/system/
+sudo cp movie-parser.service /etc/systemd/system/
 
 # Перезагрузите systemd:
 sudo systemctl daemon-reload
