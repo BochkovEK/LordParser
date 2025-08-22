@@ -169,7 +169,7 @@ async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE, top
             sql_query = '''
                 SELECT title, year, imdb_rating, kp_rating, rating_avg, link
                 FROM movies 
-                WHERE imdb_rating IS NOT NULL AND kp_rating IS NOT NULL
+                WHERE rating_avg IS NOT NULL
                 ORDER BY rating_avg DESC 
                 LIMIT %s
             '''
@@ -179,7 +179,7 @@ async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE, top
             sql_query = '''
                 SELECT title, year, imdb_rating, kp_rating, rating_avg, link
                 FROM movies 
-                WHERE year = %s AND imdb_rating IS NOT NULL AND kp_rating IS NOT NULL
+                WHERE year = %s AND rating_avg IS NOT NULL
                 ORDER BY rating_avg DESC 
                 LIMIT %s
             '''
