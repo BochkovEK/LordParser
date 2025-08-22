@@ -1,4 +1,5 @@
 import logging
+import sys
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -14,7 +15,8 @@ from parser.lordfilm_parser import LordFilmParser
 # Настройка логгирования
 logging.basicConfig(
     level=logging.DEBUG if DEFAULT_DEBUG else logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout  # Явно указываем вывод в stdout
 )
 logger = logging.getLogger('MovieScheduler')
 

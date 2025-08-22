@@ -10,7 +10,9 @@ Group=kolla
 WorkingDirectory=/home/kolla/LordParser
 
 # Ожидание готовности контейнера movie_postgres
-ExecStartPre=/bin/bash -c "until [ \"\$(sudo podman inspect -f '{{.State.Health.Status}}' movie_postgres)\" = \"healthy\" ]; do sleep 2; echo 'Waiting...'; done; echo 'Ready!'"
+# !!! sudo не поддерживается и от рута не работает ExecStartPre=/bin/bash -c 'until [ $(/usr/bin/sudo podman inspect -f "{{.State.Health.Status}}" movie_postgres) = "healthy" ]; do echo "Waiting for movie_postgres container to be healthy..."; done; echo "PostgreSQL container is healthy!"'
+# ExecStartPre=/bin/bash -c "echo 'Debug message' > /home/kolla/debug.log 2>&1"
+# cat /home/kolla/debug.log
 
 ExecStart=/bin/bash -c 'cd /home/kolla/LordParser && /usr/bin/python3 -u db_scheduler.py'
 Restart=on-failure
