@@ -169,20 +169,21 @@ async def get_top_movies(update: Update, context: ContextTypes.DEFAULT_TYPE, top
             sql_query = '''
                 SELECT title, year, imdb_rating, kp_rating, rating_avg, link
                 FROM movies 
-                WHERE rating_avg IS NOT NULL
                 ORDER BY rating_avg DESC 
                 LIMIT %s
             '''
+            # WHERE rating_avg IS NOT NULL
             params = (top_size,)
             year_text = "за все года"
         else:
             sql_query = '''
                 SELECT title, year, imdb_rating, kp_rating, rating_avg, link
                 FROM movies 
-                WHERE year = %s AND rating_avg IS NOT NULL
+                WHERE year = %s
                 ORDER BY rating_avg DESC 
                 LIMIT %s
             '''
+
             params = (int(year), top_size)
             year_text = f"за {year} год"
 
