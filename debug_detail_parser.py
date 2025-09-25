@@ -4,6 +4,7 @@ import os
 import time
 import random
 from bs4 import BeautifulSoup
+from typing import List, Dict, Optional
 
 # Добавляем путь к вашим модулям
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
