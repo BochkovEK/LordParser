@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 import sys
 import json
 import time
@@ -345,22 +345,39 @@ class LordFilmParser:
             selectors = [
                 '.country-info',
                 '[class*="country"]',
-                '.info-item:contains("Страна")',
-                '.movie-info:contains("Страна")'
+                '.movie-info',  # Общий контейнер информации
+                '.film-info',
+                '.info-list',
+                '.details'
             ]
 
             for selector in selectors:
-                element = soup.select_one(selector)
-                if element:
+                elements = soup.select(selector)
+                for element in elements:
                     text = element.get_text(strip=True)
-                    # Извлекаем название страны из текста
+
+                    # Ищем упоминание страны в тексте элемента
                     if "Страна" in text:
-                        country = text.split("Страна")[-1].strip(': ').split('\n')[0]
-                        if country:
+                        # Разбираем текст чтобы извлечь название страны
+                        lines = text.split('\n')
+                        for line in lines:
+                            if "Страна" in line:
+                                # Извлекаем страну после "Страна:"
+                                parts = line.split("Страна")
+                                if len(parts) > 1:
+                                    country = parts[1].strip(' :')
+                                    if country and len(country) < 50:  # Проверяем разумную длину
+                                        return country
+
+                    # Альтернативный подход: ищем известные названия стран
+                    countries = ['Россия', 'США', 'СССР', 'Франция', 'Великобритания',
+                                 'Германия', 'Китай', 'Япония', 'Корея', 'Индия']
+                    for country in countries:
+                        if country in text:
                             return country
-                    else:
-                        return text
+
             return None
+
         except Exception as e:
             if self.debug:
                 print(f"Debug: Error parsing country - {str(e)}")
