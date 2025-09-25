@@ -305,6 +305,213 @@ class LordFilmParser:
     #     if hasattr(self, 'driver'):
     #         self.driver.quit()
 
+    def parse_movie_details(self, movie_url: str) -> Dict:
+        """Парсинг детальной страницы фильма"""
+        try:
+            if self.debug:
+                print(f"Debug: Parsing movie details from {movie_url}")
+
+            # Загружаем страницу
+            html = self._fetch_page(movie_url)
+            if not html:
+                return {}
+
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Парсим детальную информацию
+            details = {
+                'country': self._parse_detail_country(soup),
+                'genres': self._parse_detail_genres(soup),
+                'director': self._parse_detail_director(soup),
+                'actors': self._parse_detail_actors(soup),
+                'description': self._parse_detail_description(soup),
+                'duration': self._parse_detail_duration(soup),
+                'votes_kp': self._parse_detail_votes(soup, 'kp'),
+                'votes_imdb': self._parse_detail_votes(soup, 'imdb'),
+            }
+
+            # Фильтруем пустые значения
+            return {k: v for k, v in details.items() if v is not None and v != [] and v != ''}
+
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing movie details from {movie_url} - {str(e)}")
+            return {}
+
+    def _parse_detail_country(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг страны из детальной страницы"""
+        try:
+            # Пробуем разные селекторы для страны
+            selectors = [
+                '.country-info',
+                '[class*="country"]',
+                '.info-item:contains("Страна")',
+                '.movie-info:contains("Страна")'
+            ]
+
+            for selector in selectors:
+                element = soup.select_one(selector)
+                if element:
+                    text = element.get_text(strip=True)
+                    # Извлекаем название страны из текста
+                    if "Страна" in text:
+                        country = text.split("Страна")[-1].strip(': ').split('\n')[0]
+                        if country:
+                            return country
+                    else:
+                        return text
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing country - {str(e)}")
+            return None
+
+    def _parse_detail_genres(self, soup: BeautifulSoup) -> List[str]:
+        """Парсинг жанров из детальной страницы"""
+        try:
+            genres = []
+            selectors = [
+                '.genre-tag',
+                '.category-tag',
+                '[class*="genre"]',
+                '.movie-genres a'
+            ]
+
+            for selector in selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    genre = elem.get_text(strip=True)
+                    if genre and len(genre) < 50:  # Фильтруем слишком длинные тексты
+                        genres.append(genre)
+
+            return list(set(genres))  # Убираем дубликаты
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing genres - {str(e)}")
+            return []
+
+    def _parse_detail_director(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг режиссера из детальной страницы"""
+        try:
+            selectors = [
+                '.director-name',
+                '.movie-director',
+                '[class*="director"]',
+                '.info-item:contains("Режиссер")'
+            ]
+
+            for selector in selectors:
+                element = soup.select_one(selector)
+                if element:
+                    text = element.get_text(strip=True)
+                    if "Режиссер" in text:
+                        director = text.split("Режиссер")[-1].strip(': ').split('\n')[0]
+                        if director:
+                            return director
+                    else:
+                        return text
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing director - {str(e)}")
+            return None
+
+    def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
+        """Парсинг актеров из детальной страницы"""
+        try:
+            actors = []
+            selectors = [
+                '.actor-name',
+                '.movie-actors a',
+                '[class*="actor"]',
+                '.info-item:contains("Актеры")'
+            ]
+
+            for selector in selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    actor = elem.get_text(strip=True)
+                    if actor and len(actor) < 100:
+                        actors.append(actor)
+
+            return actors[:10]  # Ограничиваем количество
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing actors - {str(e)}")
+            return []
+
+    def _parse_detail_description(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг описания из детальной страницы"""
+        try:
+            selectors = [
+                '.movie-description',
+                '.film-description',
+                '[class*="description"]',
+                '.plot-text',
+                '[itemprop="description"]'
+            ]
+
+            for selector in selectors:
+                element = soup.select_one(selector)
+                if element:
+                    text = element.get_text(strip=True)
+                    if len(text) > 20:  # Минимальная длина описания
+                        return text[:500]  # Ограничиваем длину
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing description - {str(e)}")
+            return None
+
+    def _parse_detail_duration(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг продолжительности из детальной страницы"""
+        try:
+            selectors = [
+                '.movie-duration',
+                '.film-duration',
+                '[class*="duration"]',
+                '.info-item:contains("мин")'
+            ]
+
+            for selector in selectors:
+                element = soup.select_one(selector)
+                if element:
+                    text = element.get_text(strip=True)
+                    # Ищем продолжительность в тексте
+                    import re
+                    duration_match = re.search(r'(\d+)\s*мин', text)
+                    if duration_match:
+                        return f"{duration_match.group(1)} мин"
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing duration - {str(e)}")
+            return None
+
+    def _parse_detail_votes(self, soup: BeautifulSoup, rating_type: str) -> Optional[int]:
+        """Парсинг количества голосов"""
+        try:
+            if rating_type == 'kp':
+                selectors = ['.kp-votes', '[class*="kinopoisk"][class*="votes"]']
+            else:  # imdb
+                selectors = ['.imdb-votes', '[class*="imdb"][class*="votes"]']
+
+            for selector in selectors:
+                element = soup.select_one(selector)
+                if element:
+                    text = element.get_text(strip=True)
+                    # Ищем число в тексте
+                    import re
+                    votes_match = re.search(r'(\d+,?\d+)', text.replace(' ', ''))
+                    if votes_match:
+                        votes_str = votes_match.group(1).replace(',', '')
+                        return int(votes_str)
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing {rating_type} votes - {str(e)}")
+            return None
+
 
 def is_python_shutting_down():
     """Проверяет, находится ли Python в процессе завершения работы"""
