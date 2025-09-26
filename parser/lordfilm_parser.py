@@ -337,29 +337,25 @@ class LordFilmParser:
             if self.debug:
                 print(f"Debug: Parsing movie details from {movie_url}")
 
-            # Пробуем разные методы загрузки
             html = self._fetch_page_with_retry(movie_url)
             if not html:
-                if self.debug:
-                    print(f"Debug: Failed to load page {movie_url}")
                 return {}
 
             soup = BeautifulSoup(html, 'html.parser')
 
-            # Быстрая проверка что страница загружена корректно
             if not soup.find('body'):
-                if self.debug:
-                    print(f"Debug: Empty or invalid page for {movie_url}")
                 return {}
 
             # Парсим детальную информацию
             details = {
+                'title': self._parse_detail_title(soup),
+                'original_title': self._parse_detail_original_title(soup),
+                'year': self._parse_detail_year(soup),
                 'country': self._parse_detail_country(soup),
                 'categories': self._parse_detail_categories(soup),
                 'director': self._parse_detail_director(soup),
                 'actors': self._parse_detail_actors(soup),
                 'description': self._parse_detail_description(soup),
-                'duration': self._parse_detail_duration(soup),
             }
 
             # Фильтруем пустые значения
@@ -546,6 +542,39 @@ class LordFilmParser:
             if self.debug:
                 print(f"Debug: Error parsing actors - {str(e)}")
             return []
+
+    def _parse_detail_description(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг только описания, без метаданных"""
+        try:
+            # Сначала пытаемся найти чистое описание
+            # Ищем текст который НЕ содержит метаданные
+            paragraphs = soup.find_all('p')
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                # Описание обычно не содержит ключевые слова метаданных
+                if (len(text) > 100 and
+                        'Название' not in text and
+                        'Год' not in text and
+                        'Страна' not in text and
+                        'Актеры' not in text and
+                        'Режиссер' not in text):
+                    return text
+
+            # Если не нашли, берем первый длинный текст, но обрезаем метаданные
+            full_text = soup.get_text()
+            # Находим описание до первого мета-тега
+            import re
+            match = re.search(r'(.+?)(?=Название:|Год выхода:|Страна:|Актеры:|Режиссер:|$)', full_text, re.DOTALL)
+            if match:
+                description = match.group(1).strip()
+                if len(description) > 50:
+                    return description
+
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing description - {str(e)}")
+            return None
 
 def is_python_shutting_down():
     """Проверяет, находится ли Python в процессе завершения работы"""
