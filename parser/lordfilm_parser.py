@@ -355,7 +355,7 @@ class LordFilmParser:
             # Парсим детальную информацию
             details = {
                 'country': self._parse_detail_country(soup),
-                'genres': self._parse_detail_genres(soup),
+                'categories': self._parse_detail_categories(soup),
                 'director': self._parse_detail_director(soup),
                 'actors': self._parse_detail_actors(soup),
                 'description': self._parse_detail_description(soup),
@@ -388,8 +388,8 @@ class LordFilmParser:
                     # Для жанров/категорий - извлекаем ссылки
                     elif field_name == 'Категории' or field_name == 'Жанр':
                         genre_links = li.select('a[href*="/filmy/"]')
-                        genres = [link.get_text(strip=True) for link in genre_links if link.get_text(strip=True)]
-                        return genres
+                        categories = [link.get_text(strip=True) for link in genre_links if link.get_text(strip=True)]
+                        return categories
 
                     # Для обычных текстовых полей
                     else:
@@ -509,7 +509,7 @@ class LordFilmParser:
                 print(f"Debug: Error parsing director - {str(e)}")
             return None
 
-    def _parse_detail_genres(self, soup: BeautifulSoup) -> List[str]:
+    def _parse_detail_categories(self, soup: BeautifulSoup) -> List[str]:
         """Парсинг жанров"""
         try:
             # Пробуем получить жанры из категорий
@@ -527,7 +527,24 @@ class LordFilmParser:
             return []
         except Exception as e:
             if self.debug:
-                print(f"Debug: Error parsing genres - {str(e)}")
+                print(f"Debug: Error parsing categories - {str(e)}")
+            return []
+
+    def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
+        """Быстрое исправление для тестирования"""
+        try:
+            # Ищем элемент с актерами по точной структуре
+            actors_span = soup.find('span', text='Актеры:')
+            if actors_span:
+                actors_li = actors_span.find_parent('li')
+                if actors_li:
+                    actor_links = actors_li.select('a[href*="/actors:"]')
+                    actors = [link.get_text(strip=True) for link in actor_links]
+                    return actors
+            return []
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing actors - {str(e)}")
             return []
 
 def is_python_shutting_down():
