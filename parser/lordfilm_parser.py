@@ -370,96 +370,122 @@ class LordFilmParser:
                 print(f"Debug: Error parsing movie details from {movie_url} - {str(e)}")
             return {}
 
-    def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
-        """Парсинг актеров на основе структуры списка"""
+    def _parse_detail_from_flist(self, soup: BeautifulSoup, field_name: str, is_list: bool = False) -> Union[
+        str, List[str], None]:
+        """Универсальный метод для парсинга данных из списка flist"""
         try:
-            # Ищем элемент с текстом "Актеры:"
-            actors_li = None
             list_items = soup.select('ul.flist li')
 
             for li in list_items:
-                if li.find('span') and 'Актеры:' in li.get_text():
-                    actors_li = li
-                    break
+                span = li.find('span')
+                if span and f"{field_name}:" in span.get_text():
+                    # Для актеров - извлекаем ссылки
+                    if field_name == 'Актеры':
+                        actor_links = li.select('a[href*="/actors:"]')
+                        actors = [link.get_text(strip=True) for link in actor_links if link.get_text(strip=True)]
+                        return actors
 
-            if actors_li:
-                # Извлекаем всех актеров из ссылок
-                actor_links = actors_li.select('a[href*="/actors:"]')
-                actors = []
-                for link in actor_links:
-                    actor_name = link.get_text(strip=True)
-                    if actor_name:
-                        actors.append(actor_name)
+                    # Для жанров/категорий - извлекаем ссылки
+                    elif field_name == 'Категории' or field_name == 'Жанр':
+                        genre_links = li.select('a[href*="/filmy/"]')
+                        genres = [link.get_text(strip=True) for link in genre_links if link.get_text(strip=True)]
+                        return genres
 
-                return actors
+                    # Для обычных текстовых полей
+                    else:
+                        # Удаляем span с названием поля и берем оставшийся текст
+                        span.extract()  # Удаляем span из элемента
+                        text_content = li.get_text(strip=True)
+                        if text_content:
+                            if is_list:
+                                return [item.strip() for item in text_content.split(',')]
+                            return text_content
 
-            return []
+            return None if not is_list else []
         except Exception as e:
             if self.debug:
-                print(f"Debug: Error parsing actors - {str(e)}")
-            return []
+                print(f"Debug: Error parsing {field_name} - {str(e)}")
+            return None if not is_list else []
 
-    def _parse_detail_description(self, soup: BeautifulSoup) -> Optional[str]:
-        """Парсинг только описания, без метаданных"""
+    def _parse_detail_title(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг названия фильма"""
         try:
-            # Сначала пытаемся найти чистое описание
-            # Ищем текст который НЕ содержит метаданные
-            paragraphs = soup.find_all('p')
-            for p in paragraphs:
-                text = p.get_text(strip=True)
-                # Описание обычно не содержит ключевые слова метаданных
-                if (len(text) > 100 and
-                        'Название' not in text and
-                        'Год' not in text and
-                        'Страна' not in text and
-                        'Актеры' not in text and
-                        'Режиссер' not in text):
-                    return text
+            # Сначала ищем в заголовке страницы
+            title_tag = soup.find('title')
+            if title_tag:
+                title_text = title_tag.get_text()
+                # Убираем лишние части (например, "смотреть онлайн")
+                if 'смотреть онлайн' in title_text:
+                    title = title_text.split('смотреть онлайн')[0].strip()
+                    return title
 
-            # Если не нашли, берем первый длинный текст, но обрезаем метаданные
-            full_text = soup.get_text()
-            # Находим описание до первого мета-тега
-            import re
-            match = re.search(r'(.+?)(?=Название:|Год выхода:|Страна:|Актеры:|Режиссер:|$)', full_text, re.DOTALL)
-            if match:
-                description = match.group(1).strip()
-                if len(description) > 50:
-                    return description
+            # Ищем в h1 или других заголовках
+            h1 = soup.find('h1')
+            if h1:
+                return h1.get_text(strip=True)
+
+            # Ищем в списке
+            return self._parse_detail_from_flist(soup, 'Название')
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing title - {str(e)}")
+            return None
+
+    def _parse_detail_original_title(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг оригинального названия"""
+        try:
+            # Пробуем разные варианты названий полей
+            fields_to_try = ['Оригинальное название', 'Original title', 'Название оригинала']
+
+            for field in fields_to_try:
+                result = self._parse_detail_from_flist(soup, field)
+                if result:
+                    return result
 
             return None
         except Exception as e:
             if self.debug:
-                print(f"Debug: Error parsing description - {str(e)}")
+                print(f"Debug: Error parsing original title - {str(e)}")
+            return None
+
+    def _parse_detail_year(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг года выпуска"""
+        try:
+            # Пробуем разные варианты названий полей
+            fields_to_try = ['Год выхода', 'Год', 'Year', 'Дата выхода']
+
+            for field in fields_to_try:
+                result = self._parse_detail_from_flist(soup, field)
+                if result:
+                    # Извлекаем только цифры года
+                    import re
+                    year_match = re.search(r'\b(19|20)\d{2}\b', result)
+                    if year_match:
+                        return year_match.group()
+                    return result
+
+            # Альтернативный поиск в URL или категориях
+            year_link = soup.find('a', href=re.compile(r'/filmy/\d{4}/'))
+            if year_link:
+                year_match = re.search(r'/(\d{4})/', year_link.get('href', ''))
+                if year_match:
+                    return year_match.group(1)
+
+            return None
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing year - {str(e)}")
             return None
 
     def _parse_detail_country(self, soup: BeautifulSoup) -> Optional[str]:
-        """Парсинг страны - улучшенная версия"""
+        """Парсинг страны"""
         try:
-            # Ищем текст "Страна:" и берем следующий элемент
-            country_label = soup.find(text=lambda t: t and 'Страна' in str(t))
-            if country_label:
-                # Берем родительский элемент и ищем все текстовые узлы
-                parent = country_label.parent
-                if parent:
-                    text = parent.get_text()
-                    # Извлекаем страну после "Страна:"
-                    parts = text.split('Страна')
-                    if len(parts) > 1:
-                        country = parts[1].split('\n')[0].strip(' :')
-                        if country:
-                            return country
+            fields_to_try = ['Страна', 'Country', 'Производство']
 
-            # Альтернативный поиск по классам
-            info_blocks = soup.select('.movie-info, .film-info, .info, .details')
-            for block in info_blocks:
-                text = block.get_text()
-                if 'Страна' in text:
-                    lines = text.split('\n')
-                    for line in lines:
-                        if 'Страна' in line:
-                            country = line.split('Страна')[-1].strip(' :')
-                            if country:
-                                return country
+            for field in fields_to_try:
+                result = self._parse_detail_from_flist(soup, field)
+                if result:
+                    return result
 
             return None
         except Exception as e:
@@ -467,41 +493,15 @@ class LordFilmParser:
                 print(f"Debug: Error parsing country - {str(e)}")
             return None
 
-    def _parse_detail_genres(self, soup: BeautifulSoup) -> List[str]:
-        """Парсинг жанров - улучшенная версия"""
-        try:
-            # Ищем текст "Жанр:"
-            genre_label = soup.find(text=lambda t: t and 'Жанр' in str(t))
-            if genre_label:
-                parent = genre_label.parent
-                if parent:
-                    text = parent.get_text()
-                    parts = text.split('Жанр')
-                    if len(parts) > 1:
-                        genres_text = parts[1].split('\n')[0].strip(' :')
-                        # Разделяем жанры по запятым
-                        genres = [g.strip() for g in genres_text.split(',')]
-                        return genres
-
-            return []
-        except Exception as e:
-            if self.debug:
-                print(f"Debug: Error parsing genres - {str(e)}")
-            return []
-
     def _parse_detail_director(self, soup: BeautifulSoup) -> Optional[str]:
-        """Парсинг режиссера - улучшенная версия"""
+        """Парсинг режиссера"""
         try:
-            director_label = soup.find(text=lambda t: t and 'Режиссер' in str(t))
-            if director_label:
-                parent = director_label.parent
-                if parent:
-                    text = parent.get_text()
-                    parts = text.split('Режиссер')
-                    if len(parts) > 1:
-                        director = parts[1].split('\n')[0].strip(' :')
-                        if director:
-                            return director
+            fields_to_try = ['Режиссер', 'Director', 'Режиссеры']
+
+            for field in fields_to_try:
+                result = self._parse_detail_from_flist(soup, field)
+                if result:
+                    return result
 
             return None
         except Exception as e:
@@ -509,24 +509,26 @@ class LordFilmParser:
                 print(f"Debug: Error parsing director - {str(e)}")
             return None
 
-    def _parse_detail_duration(self, soup: BeautifulSoup) -> Optional[str]:
-        """Парсинг продолжительности - улучшенная версия"""
+    def _parse_detail_genres(self, soup: BeautifulSoup) -> List[str]:
+        """Парсинг жанров"""
         try:
-            # Ищем текст с указанием минут
-            duration_text = soup.find(text=lambda t: t and 'мин' in str(t))
-            if duration_text:
-                # Ищем число перед "мин"
-                import re
-                match = re.search(r'(\d+)\s*мин', duration_text)
-                if match:
-                    return f"{match.group(1)} мин"
+            # Пробуем получить жанры из категорий
+            result = self._parse_detail_from_flist(soup, 'Категории')
+            if result:
+                return result
 
-            return None
+            # Пробуем поле "Жанр"
+            result = self._parse_detail_from_flist(soup, 'Жанр')
+            if result:
+                if isinstance(result, list):
+                    return result
+                return [result]
+
+            return []
         except Exception as e:
             if self.debug:
-                print(f"Debug: Error parsing duration - {str(e)}")
-            return None
-
+                print(f"Debug: Error parsing genres - {str(e)}")
+            return []
 
 def is_python_shutting_down():
     """Проверяет, находится ли Python в процессе завершения работы"""
