@@ -455,7 +455,7 @@ class LordFilmParser:
                 result = self._parse_detail_from_flist(soup, field)
                 if result:
                     # Извлекаем только цифры года
-                    import re
+                    # import re
                     year_match = re.search(r'\b(19|20)\d{2}\b', result)
                     if year_match:
                         return year_match.group()
@@ -564,7 +564,7 @@ class LordFilmParser:
             # Если не нашли, берем первый длинный текст, но обрезаем метаданные
             full_text = soup.get_text()
             # Находим описание до первого мета-тега
-            import re
+            # import re
             match = re.search(r'(.+?)(?=Название:|Год выхода:|Страна:|Актеры:|Режиссер:|$)', full_text, re.DOTALL)
             if match:
                 description = match.group(1).strip()
@@ -669,7 +669,7 @@ class LordFilmParser:
     def _extract_rating_from_text(self, text: str) -> Dict[str, str]:
         """Извлечение рейтинга и голосов из текста"""
         try:
-            import re
+            # import re
 
             rating = None
             votes = None
@@ -733,7 +733,7 @@ class LordFilmParser:
     def _find_votes_near_rating(self, rating_element) -> Dict[str, str]:
         """Поиск количества голосов рядом с рейтингом"""
         try:
-            import re
+            # import re
 
             # Сначала проверяем родительский элемент
             parent = rating_element.find_element(By.XPATH, "./..")
@@ -792,7 +792,7 @@ class LordFilmParser:
     def _find_rating_by_text_pattern(self) -> Dict[str, str]:
         """Поиск рейтинга по текстовым паттернам на всей странице"""
         try:
-            import re
+            # import re
 
             # Получаем весь текст страницы
             body = self.driver.find_element(By.TAG_NAME, "body")
