@@ -80,8 +80,8 @@ class LordFilmParser:
         )
         self.driver.set_page_load_timeout(60)  # 60 секунд на загрузку страницы
 
-        # 2. Таймаут ожидания элементов (секунды)
-        # wait = WebDriverWait(driver, 30)  # Ожидание до 30 секунд
+        # Добавляем WebDriverWait
+        self.wait = WebDriverWait(self.driver, 10)  # 10 секунд ожидания по умолчанию
 
         # Изменение свойств браузера для обхода детекции
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -575,6 +575,271 @@ class LordFilmParser:
             if self.debug:
                 print(f"Debug: Error parsing description - {str(e)}")
             return None
+
+    def parse_movie_details_with_rating(self, movie_url: str) -> Dict:
+        """Парсинг с рейтингом через Selenium wait"""
+        # Базовый парсинг
+        details = self.parse_movie_details(movie_url)
+
+        # Парсинг рейтинга с использованием self.wait
+        rating_data = self._parse_rating_with_wait()
+        details.update(rating_data)
+
+        return details
+
+    def _parse_rating_with_wait(self) -> Dict[str, str]:
+        """Парсинг рейтинга с использованием ожидания"""
+        try:
+            # Селекторы для различных вариантов отображения рейтинга
+            rating_selectors = [
+                '.rating',
+                '.vote',
+                '.imdb-rating',
+                '.kinopoisk-rating',
+                '.kp-rating',
+                '[class*="rating"]',
+                '[class*="vote"]',
+                '[itemprop="ratingValue"]',
+                '.rating-value',
+                '.score',
+                '.rate',
+                '.value',
+                '.film-rating',
+                '.movie-rating',
+            ]
+
+            for selector in rating_selectors:
+                try:
+                    if self.debug:
+                        print(f"Debug: Trying rating selector: {selector}")
+
+                    # Ждем появления элемента с рейтингом
+                    rating_element = self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
+
+                    # Прокручиваем элемент в viewport для активации возможного lazy loading
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", rating_element)
+
+                    # Даем время для возможной анимации/загрузки
+                    import time
+                    time.sleep(1)
+
+                    rating_text = rating_element.text.strip()
+                    if rating_text and any(char.isdigit() for char in rating_text):
+                        if self.debug:
+                            print(f"Debug: Found rating text: '{rating_text}' with selector '{selector}'")
+
+                        # Извлекаем рейтинг и голоса из текста
+                        rating_data = self._extract_rating_from_text(rating_text)
+
+                        # Если нашли рейтинг, пытаемся найти количество голосов рядом
+                        if rating_data.get('rating'):
+                            if self.debug:
+                                print(f"Debug: Extracted rating: {rating_data}")
+
+                            # Ищем голоса в соседних элементах
+                            votes_data = self._find_votes_near_rating(rating_element)
+                            if votes_data.get('votes'):
+                                rating_data['votes'] = votes_data['votes']
+                                if self.debug:
+                                    print(f"Debug: Found votes: {votes_data['votes']}")
+
+                            return rating_data
+                    else:
+                        if self.debug:
+                            print(f"Debug: Selector '{selector}' found but no rating text: '{rating_text}'")
+
+                except Exception as e:
+                    if self.debug:
+                        print(f"Debug: Selector '{selector}' failed: {str(e)}")
+                    continue
+
+            # Если не нашли стандартными селекторами, пробуем поиск по тексту на странице
+            if self.debug:
+                print("Debug: Trying text pattern search...")
+            return self._find_rating_by_text_pattern()
+
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error in _parse_rating_with_wait - {str(e)}")
+            return {}
+
+    def _extract_rating_from_text(self, text: str) -> Dict[str, str]:
+        """Извлечение рейтинга и голосов из текста"""
+        try:
+            import re
+
+            rating = None
+            votes = None
+
+            # Паттерны для рейтинга (приоритет по порядку)
+            rating_patterns = [
+                r'(\d+\.?\d*)\s*\/\s*10',  # 8.5/10
+                r'(\d+\.?\d*)\s*из\s*10',  # 8.5 из 10
+                r'IMDb[:\s]*(\d+\.?\d*)',  # IMDb: 8.5 или IMDb 8.5
+                r'КП[:\s]*(\d+\.?\d*)',  # КП: 7.8 или КП 7.8
+                r'KP[:\s]*(\d+\.?\d*)',  # KP: 7.8
+                r'КиноПоиск[:\s]*(\d+\.?\d*)',  # КиноПоиск: 7.8
+                r'Рейтинг[:\s]*(\d+\.?\d*)',  # Рейтинг: 8.5
+                r'Rating[:\s]*(\d+\.?\d*)',  # Rating: 8.5
+                r'(\d+\.?\d*)\s*\(',  # 8.5 (1234)
+                r'\b(\d+\.?\d*)\b',  # просто число 8.5
+            ]
+
+            # Паттерны для голосов
+            votes_patterns = [
+                r'\((\d+)\s*голос',  # (1234 голосов)
+                r'\((\d+)\s*оцен',  # (1234 оценок)
+                r'\((\d+)\s*vote',  # (1234 votes)
+                r'(\d+)\s*голос',  # 1234 голосов
+                r'(\d+)\s*оцен',  # 1234 оценок
+                r'(\d+)\s*vote',  # 1234 votes
+                r'голосов[:\s]*(\d+)',  # голосов: 1234
+                r'оценок[:\s]*(\d+)',  # оценок: 1234
+                r'votes[:\s]*(\d+)',  # votes: 1234
+            ]
+
+            # Ищем рейтинг
+            for pattern in rating_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    rating = match.group(1)
+                    if self.debug:
+                        print(f"Debug: Rating pattern '{pattern}' matched: {rating}")
+                    break
+
+            # Ищем голоса
+            for pattern in votes_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    votes = match.group(1)
+                    if self.debug:
+                        print(f"Debug: Votes pattern '{pattern}' matched: {votes}")
+                    break
+
+            result = {'rating': rating}
+            if votes:
+                result['votes'] = votes
+
+            return result
+
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error extracting rating from text - {str(e)}")
+            return {}
+
+    def _find_votes_near_rating(self, rating_element) -> Dict[str, str]:
+        """Поиск количества голосов рядом с рейтингом"""
+        try:
+            import re
+
+            # Сначала проверяем родительский элемент
+            parent = rating_element.find_element(By.XPATH, "./..")
+            parent_text = parent.text.strip()
+
+            # Ищем голоса в тексте родителя
+            votes_patterns = [
+                r'\((\d+)\s*голос',
+                r'\((\d+)\s*оцен',
+                r'\((\d+)\s*vote',
+                r'(\d+)\s*голос',
+                r'(\d+)\s*оцен',
+                r'(\d+)\s*vote',
+            ]
+
+            for pattern in votes_patterns:
+                match = re.search(pattern, parent_text, re.IGNORECASE)
+                if match:
+                    votes = match.group(1)
+                    if self.debug:
+                        print(f"Debug: Found votes in parent: {votes}")
+                    return {'votes': votes}
+
+            # Ищем в соседних элементах
+            try:
+                siblings = parent.find_elements(By.XPATH, "./*")
+                for sibling in siblings:
+                    if sibling != rating_element:
+                        sibling_text = sibling.text.strip()
+                        if any(word in sibling_text.lower() for word in ['голос', 'оцен', 'vote']):
+                            votes_match = re.search(r'(\d+)', sibling_text)
+                            if votes_match:
+                                votes = votes_match.group(1)
+                                if self.debug:
+                                    print(f"Debug: Found votes in sibling: {votes}")
+                                return {'votes': votes}
+            except:
+                pass
+
+            # Ищем в том же элементе после рейтинга
+            rating_text = rating_element.text
+            votes_match = re.search(r'[^\d](\d+)\s*(?:голос|оцен|vote)', rating_text, re.IGNORECASE)
+            if votes_match:
+                votes = votes_match.group(1)
+                if self.debug:
+                    print(f"Debug: Found votes in same element: {votes}")
+                return {'votes': votes}
+
+            return {}
+
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error finding votes near rating - {str(e)}")
+            return {}
+
+    def _find_rating_by_text_pattern(self) -> Dict[str, str]:
+        """Поиск рейтинга по текстовым паттернам на всей странице"""
+        try:
+            import re
+
+            # Получаем весь текст страницы
+            body = self.driver.find_element(By.TAG_NAME, "body")
+            page_text = body.text
+
+            if self.debug:
+                print(f"Debug: Searching rating in page text (first 500 chars): {page_text[:500]}...")
+
+            # Паттерны для поиска рейтинга в тексте
+            patterns = [
+                r'IMDb[:\s]*(\d+\.?\d*)',
+                r'КП[:\s]*(\d+\.?\d*)',
+                r'KP[:\s]*(\d+\.?\d*)',
+                r'КиноПоиск[:\s]*(\d+\.?\d*)',
+                r'Рейтинг[:\s]*(\d+\.?\d*)',
+                r'Rating[:\s]*(\d+\.?\d*)',
+                r'Оценка[:\s]*(\d+\.?\d*)',
+                r'Score[:\s]*(\d+\.?\d*)',
+            ]
+
+            for pattern in patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                    rating = match.group(1)
+                    if self.debug:
+                        print(f"Debug: Found rating with text pattern '{pattern}': {rating}")
+
+                    # Пытаемся найти голоса рядом с рейтингом в тексте
+                    votes = None
+                    votes_match = re.search(r'(\d+)\s*голос', page_text[match.start():match.start() + 100],
+                                            re.IGNORECASE)
+                    if votes_match:
+                        votes = votes_match.group(1)
+
+                    result = {'rating': rating}
+                    if votes:
+                        result['votes'] = votes
+
+                    return result
+
+            if self.debug:
+                print("Debug: No rating found with text patterns")
+            return {}
+
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error in _find_rating_by_text_pattern - {str(e)}")
+            return {}
 
 def is_python_shutting_down():
     """Проверяет, находится ли Python в процессе завершения работы"""
