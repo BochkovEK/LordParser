@@ -31,9 +31,9 @@ def test_movie_details():
 
         for key, value in details.items():
             if isinstance(value, list):
-                print(f"{key:15}: {', '.join(value)}\n")
+                print(f"{key:15}: {', '.join(value)}")
             else:
-                print(f"{key:15}: {value}\n")
+                print(f"{key:15}: {value}")
 
         print("=" * 60)
 

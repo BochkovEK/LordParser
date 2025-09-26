@@ -370,38 +370,66 @@ class LordFilmParser:
                 print(f"Debug: Error parsing movie details from {movie_url} - {str(e)}")
             return {}
 
-    def _parse_detail_description(self, soup: BeautifulSoup) -> Optional[str]:
-        """Парсинг описания фильма"""
+    def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
+        """Парсинг актеров - исправленная версия"""
         try:
-            # Пробуем разные селекторы для описания
-            selectors = [
-                '.movie-description',
-                '.film-description',
-                '.description',
-                '[class*="desc"]',
-                '.plot',
-                '.synopsis',
-                '.story',
-                'p'  # Просто параграфы, если описание в них
-            ]
+            # Ищем "Актеры" (множественное число)
+            actors_label = soup.find(text=lambda t: t and 'Актеры' in str(t))
+            if actors_label:
+                parent = actors_label.parent
+                if parent:
+                    text = parent.get_text()
+                    # Разделяем по "Актеры" и берем часть после
+                    parts = text.split('Актеры')
+                    if len(parts) > 1:
+                        actors_text = parts[1].split('\n')[0].strip(' :')
+                        # Разделяем актеров по запятым
+                        actors = [a.strip() for a in actors_text.split(',')]
+                        return actors[:8]
 
-            for selector in selectors:
-                element = soup.select_one(selector)
-                if element:
-                    text = element.get_text(strip=True)
-                    # Проверяем что это похоже на описание (достаточно длинное)
-                    if len(text) > 50 and len(text) < 2000:
-                        return text
+            # Дополнительно: ищем в списке с классом flist
+            flist_items = soup.select('.flist li')
+            for item in flist_items:
+                text = item.get_text()
+                if 'Актеры' in text:
+                    actors_text = text.split('Актеры')[-1].strip(' :')
+                    actors = [a.strip() for a in actors_text.split(',')]
+                    return actors[:8]
 
-            # Альтернативный подход: ищем блок с наибольшим текстом
+            return []
+        except Exception as e:
+            if self.debug:
+                print(f"Debug: Error parsing actors - {str(e)}")
+            return []
+
+    def _parse_detail_description(self, soup: BeautifulSoup) -> Optional[str]:
+        """Парсинг только описания, без метаданных"""
+        try:
+            # Сначала пытаемся найти чистое описание
+            # Ищем текст который НЕ содержит метаданные
             paragraphs = soup.find_all('p')
             for p in paragraphs:
                 text = p.get_text(strip=True)
-                if 100 < len(text) < 1500:  # Описание обычно средней длины
+                # Описание обычно не содержит ключевые слова метаданных
+                if (len(text) > 100 and
+                        'Название' not in text and
+                        'Год' not in text and
+                        'Страна' not in text and
+                        'Актеры' not in text and
+                        'Режиссер' not in text):
                     return text
 
-            return None
+            # Если не нашли, берем первый длинный текст, но обрезаем метаданные
+            full_text = soup.get_text()
+            # Находим описание до первого мета-тега
+            import re
+            match = re.search(r'(.+?)(?=Название:|Год выхода:|Страна:|Актеры:|Режиссер:|$)', full_text, re.DOTALL)
+            if match:
+                description = match.group(1).strip()
+                if len(description) > 50:
+                    return description
 
+            return None
         except Exception as e:
             if self.debug:
                 print(f"Debug: Error parsing description - {str(e)}")
@@ -483,27 +511,6 @@ class LordFilmParser:
             if self.debug:
                 print(f"Debug: Error parsing director - {str(e)}")
             return None
-
-    def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
-        """Парсинг актеров - улучшенная версия"""
-        try:
-            actors_label = soup.find(text=lambda t: t and 'Актер' in str(t))
-            if actors_label:
-                parent = actors_label.parent
-                if parent:
-                    text = parent.get_text()
-                    parts = text.split('Актер')
-                    if len(parts) > 1:
-                        actors_text = parts[1].split('\n')[0].strip(' :')
-                        # Разделяем актеров по запятым
-                        actors = [a.strip() for a in actors_text.split(',')]
-                        return actors[:8]  # Ограничиваем количество
-
-            return []
-        except Exception as e:
-            if self.debug:
-                print(f"Debug: Error parsing actors - {str(e)}")
-            return []
 
     def _parse_detail_duration(self, soup: BeautifulSoup) -> Optional[str]:
         """Парсинг продолжительности - улучшенная версия"""
