@@ -371,30 +371,27 @@ class LordFilmParser:
             return {}
 
     def _parse_detail_actors(self, soup: BeautifulSoup) -> List[str]:
-        """Парсинг актеров - исправленная версия"""
+        """Парсинг актеров на основе структуры списка"""
         try:
-            # Ищем "Актеры" (множественное число)
-            actors_label = soup.find(text=lambda t: t and 'Актеры' in str(t))
-            if actors_label:
-                parent = actors_label.parent
-                if parent:
-                    text = parent.get_text()
-                    # Разделяем по "Актеры" и берем часть после
-                    parts = text.split('Актеры')
-                    if len(parts) > 1:
-                        actors_text = parts[1].split('\n')[0].strip(' :')
-                        # Разделяем актеров по запятым
-                        actors = [a.strip() for a in actors_text.split(',')]
-                        return actors[:8]
+            # Ищем элемент с текстом "Актеры:"
+            actors_li = None
+            list_items = soup.select('ul.flist li')
 
-            # Дополнительно: ищем в списке с классом flist
-            flist_items = soup.select('.flist li')
-            for item in flist_items:
-                text = item.get_text()
-                if 'Актеры' in text:
-                    actors_text = text.split('Актеры')[-1].strip(' :')
-                    actors = [a.strip() for a in actors_text.split(',')]
-                    return actors[:8]
+            for li in list_items:
+                if li.find('span') and 'Актеры:' in li.get_text():
+                    actors_li = li
+                    break
+
+            if actors_li:
+                # Извлекаем всех актеров из ссылок
+                actor_links = actors_li.select('a[href*="/actors:"]')
+                actors = []
+                for link in actor_links:
+                    actor_name = link.get_text(strip=True)
+                    if actor_name:
+                        actors.append(actor_name)
+
+                return actors
 
             return []
         except Exception as e:
