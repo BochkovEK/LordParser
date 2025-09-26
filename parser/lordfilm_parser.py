@@ -842,6 +842,94 @@ class LordFilmParser:
                 print(f"Debug: Error in _find_rating_by_text_pattern - {str(e)}")
             return {}
 
+    def debug_page_ratings(self):
+        """Комплексная диагностика рейтингов на странице"""
+        print("=== ДИАГНОСТИКА РЕЙТИНГОВ ===")
+
+        # 1. Проверяем видимый текст
+        print("\n1. Поиск по текстовым паттернам:")
+        patterns = ['+941', '1105', '1023', '82', 'голос', 'оцен', 'like', 'dislike', 'rating']
+        for pattern in patterns:
+            elements = self.driver.find_elements(By.XPATH, f"//*[contains(text(), '{pattern}')]")
+            print(f"   '{pattern}': {len(elements)} элементов")
+            for elem in elements[:2]:  # первые 2
+                print(f"     - '{elem.text.strip()}'")
+
+        # 2. Проверяем элементы по классам/ID
+        print("\n2. Поиск по селекторам:")
+        selectors = [
+            '[id*="ratig"]',
+            '[class*="ratig"]',
+            '[id*="rating"]',
+            '[class*="rating"]',
+            '[class*="vote"]',
+            '[class*="like"]',
+            '.ignore-select',
+            '[onclick*="rating"]'
+        ]
+
+        for selector in selectors:
+            try:
+                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                print(f"   '{selector}': {len(elements)} элементов")
+                for elem in elements[:2]:
+                    text = elem.text.strip()
+                    if text:
+                        print(f"     - Текст: '{text}'")
+                        print(f"       HTML: {elem.get_attribute('innerHTML')[:100]}...")
+            except Exception as e:
+                print(f"   '{selector}': ошибка - {e}")
+
+        # 3. Проверяем все span элементы (часто рейтинги в span)
+        print("\n3. Анализ span элементов с цифрами:")
+        spans = self.driver.find_elements(By.TAG_NAME, "span")
+        rating_spans = []
+        for span in spans[:50]:  # первые 50 span
+            text = span.text.strip()
+            if any(char in text for char in ['+', '/10', 'IMDb', 'КП']) or re.search(r'\d+\.\d+', text):
+                rating_spans.append(span)
+
+        print(f"   Найдено подозрительных span: {len(rating_spans)}")
+        for span in rating_spans[:5]:
+            print(f"     - '{span.text}'")
+            print(f"       Класс: '{span.get_attribute('class')}'")
+
+    def check_specific_elements(self):
+        """Проверка конкретных элементов из твоего JSON"""
+        print("=== ПРОВЕРКА КОНКРЕТНЫХ ЭЛЕМЕНТОВ ===")
+
+        # 1. Ищем элемент с ID из твоего JSON
+        element_id = "ratig-layer-30747"
+        try:
+            element = self.driver.find_element(By.ID, element_id)
+            print(f"✅ Найден элемент с ID '{element_id}':")
+            print(f"   Текст: '{element.text}'")
+            print(f"   HTML: {element.get_attribute('innerHTML')}")
+        except:
+            print(f"❌ Элемент с ID '{element_id}' не найден")
+
+        # 2. Ищем по классам из JSON
+        classes_to_find = ['ignore-select', 'ratingtypeplusminus', 'ratingplus']
+        for class_name in classes_to_find:
+            elements = self.driver.find_elements(By.CLASS_NAME, class_name)
+            print(f"   Класс '.{class_name}': {len(elements)} элементов")
+            for elem in elements[:2]:
+                print(f"     - Текст: '{elem.text.strip()}'")
+
+    def check_parent_container(self):
+        """Поиск контейнера который содержит рейтинг"""
+        print("\n=== ПОИСК КОНТЕЙНЕРА ===")
+
+        # Ищем элементы которые могут содержать рейтинг
+        containers = self.driver.find_elements(By.XPATH,
+                                               "//div[contains(@class, 'rating') or contains(@class, 'vote')]")
+        print(f"Найдено контейнеров: {len(containers)}")
+
+        for container in containers[:3]:
+            print(f"Контейнер: {container.get_attribute('class')}")
+            print(f"Текст: '{container.text.strip()}'")
+            print("---")
+
 def is_python_shutting_down():
     """Проверяет, находится ли Python в процессе завершения работы"""
 
