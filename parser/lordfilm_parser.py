@@ -848,7 +848,7 @@ class LordFilmParser:
 
         # 1. Проверяем видимый текст
         print("\n1. Поиск по текстовым паттернам:")
-        patterns = ['+941', '1105', '1023', '82', 'голос', 'оцен', 'like', 'dislike', 'rating', '105', '9', '12' ]
+        patterns = ['566', '8.2', '124', 'голос', 'оцен', 'like', 'dislike', 'rating', '105', '9', '12' ]
         for pattern in patterns:
             elements = self.driver.find_elements(By.XPATH, f"//*[contains(text(), '{pattern}')]")
             print(f"   '{pattern}': {len(elements)} элементов")
