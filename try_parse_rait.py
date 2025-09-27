@@ -43,12 +43,12 @@ def parse_rating(driver, url, target_values):
         driver.get(url)
 
         # Ждем загрузки страницы
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 5).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
 
         # Даем время для загрузки динамического контента
-        time.sleep(2)
+        time.sleep(3)
 
         results = {}
 
