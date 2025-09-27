@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import json
 import time
+import re
 # import os
 
 SELENIUM_URL = "http://localhost:4444/wd/hub"
@@ -127,38 +128,62 @@ def search_in_priority_elements(driver, target_value):
 
 
 def search_with_xpath(driver, target_value):
-    """Расширенный XPath поиск"""
+    """Расширенный XPath поиск с учетом структуры из скриншота"""
     xpath_strategies = [
-        # Точное совпадение текста
-        f"//*[text()='{target_value}']",
-        # Содержит значение как подстроку
-        f"//*[contains(text(), '{target_value}')]",
-        # Ищем числа, окруженные пробелами/знаками препинания
-        f"//*[contains(., ' {target_value} ')]",
-        f"//*[contains(., '{target_value}.')]",
-        f"//*[contains(., '{target_value},')]",
-        # Поиск в span, div, strong, b (часто содержат числа)
-        f"//span[contains(., '{target_value}')]",
-        f"//div[contains(., '{target_value}')]",
-        f"//strong[contains(., '{target_value}')]",
-        f"//b[contains(., '{target_value}')]",
+        # Для чисел, идущих подряд (как в скриншоте)
+        f"//*[contains(., ' {target_value} ')]",  # пробелы вокруг
+        f"//*[contains(., '{target_value} ')]",  # пробел после
+        f"//*[contains(., ' {target_value}')]",  # пробел перед
+        f"//*[contains(., '{target_value}')]",  # без пробелов
+
+        # Специфично для структуры "Голоса: 8.2 570 126"
+        f"//*[contains(., 'Голоса:') and contains(., '{target_value}')]",
+        f"//*[contains(., 'Рейтинг:') and contains(., '{target_value}')]",
+
+        # Поиск в элементах с классом, содержащим rating/votes
+        "//*[contains(@class, 'rating')]",
+        "//*[contains(@class, 'votes')]",
+        "//*[contains(@class, 'score')]",
     ]
 
     for xpath in xpath_strategies:
         try:
             elements = driver.find_elements(By.XPATH, xpath)
-            if elements:
-                element = elements[0]
-                return element, "xpath", {
-                    "text": element.text.strip(),
-                    "xpath": xpath,
-                    "tag": element.tag_name
-                }
+            for element in elements:
+                text = element.text.strip()
+                if target_value in text:
+                    return element, "xpath", {
+                        "text": text,
+                        "xpath": xpath,
+                        "tag": element.tag_name,
+                        "full_context": text
+                    }
         except:
             continue
 
     return None, "", {}
 
+
+def search_rating_block(driver, target_value):
+    """Специфичный поиск в блоке рейтинга (по структуре скриншота)"""
+    try:
+        # Ищем блок, содержащий "Голоса:" и нужное число
+        rating_blocks = driver.find_elements(By.XPATH, "//*[contains(., 'Голоса:')]")
+
+        for block in rating_blocks:
+            block_text = block.text
+            if target_value in block_text:
+                # Разбираем блок на составляющие
+                numbers = re.findall(r'\d+\.?\d*', block_text)
+                return block, "rating_block", {
+                    "full_text": block_text,
+                    "all_numbers": numbers,
+                    "target_position": numbers.index(target_value) if target_value in numbers else -1
+                }
+    except:
+        pass
+
+    return None, "", {}
 
 def search_in_attributes(driver, target_value):
     """Поиск в data-атрибутах и других атрибутах"""
