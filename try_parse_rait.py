@@ -5,13 +5,15 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import json
 import time
-import os
+# import os
 
-# Загружаем конфиг один раз при импорте
-with open('config.json', 'r') as f:
-    CONFIG = json.load(f)
+# # Загружаем конфиг один раз при импорте
+# with open('config.json', 'r') as f:
+#     CONFIG = json.load(f)
 
-SELENIUM_URL = os.getenv('SELENIUM_URL', CONFIG['selenium_url'])
+# SELENIUM_URL = os.getenv('SELENIUM_URL', CONFIG['selenium_url'])
+
+SELENIUM_URL = "http://localhost:4444/wd/hub"
 
 def setup_driver():
     """Настройка Selenium WebDriver для контейнера"""
