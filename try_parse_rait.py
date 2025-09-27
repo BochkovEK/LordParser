@@ -27,6 +27,7 @@ def setup_driver():
     )
     return driver
 
+
 def parse_rating(driver, url, target_values):
     """
     Улучшенный парсинг рейтинга с multiple стратегиями поиска
@@ -185,6 +186,7 @@ def search_rating_block(driver, target_value):
 
     return None, "", {}
 
+
 def search_in_attributes(driver, target_value):
     """Поиск в data-атрибутах и других атрибутах"""
     attributes = ['data-rating', 'data-votes', 'data-score', 'data-value',
@@ -298,6 +300,71 @@ def search_in_metadata(driver, target_value):
         pass
 
     return None, "", {}
+
+
+def search_rating_numbers(driver, target_value):
+    """Поиск чисел, которые идут подряд без текста (как в скриншоте)"""
+    try:
+        # Ищем все элементы с текстом
+        all_elements = driver.find_elements(By.XPATH, "//*[text()]")
+
+        for element in all_elements:
+            text = element.text.strip()
+            # Ищем элементы, которые содержат ТОЛЬКО числа (или наше число)
+            if text == target_value or (target_value in text and len(text) < 10):
+                # Проверяем, что это похоже на блок рейтинга (рядом есть другие числа)
+                parent_text = element.find_element(By.XPATH, "..").text
+                numbers_in_parent = re.findall(r'\d+\.?\d*', parent_text)
+
+                if len(numbers_in_parent) >= 2:  # Если в родителе есть несколько чисел
+                    return element, "rating_number", {
+                        "text": text,
+                        "parent_numbers": numbers_in_parent,
+                        "tag": element.tag_name
+                    }
+
+        # Альтернатива: ищем блоки, где есть несколько чисел подряд
+        elements_with_numbers = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
+        for element in elements_with_numbers:
+            text = element.text.strip()
+            numbers = re.findall(r'\d+\.?\d*', text)
+            if target_value in numbers and len(numbers) >= 2:
+                return element, "number_sequence", {
+                    "text": text,
+                    "all_numbers": numbers,
+                    "tag": element.tag_name
+                }
+
+    except:
+        pass
+
+    return None, "", {}
+
+
+def search_specific_location(driver, target_value):
+    """Поиск в конкретных местах (конец страницы, блоки рейтинга)"""
+    try:
+        # Стратегия 1: Ищем в нижней части страницы (где обычно рейтинги)
+        body = driver.find_element(By.TAG_NAME, "body")
+        body_html = body.get_attribute("innerHTML")
+
+        # Ищем паттерн: число, пробел, число, пробел, число
+        if target_value in body_html:
+            # Находим конкретный элемент с этим числом
+            elements = driver.find_elements(By.XPATH, f"//*[text()='{target_value}']")
+            if elements:
+                return elements[0], "exact_match", {"text": target_value}
+
+        # Стратегия 2: Ищем элементы, содержащие только числа
+        elements = driver.find_elements(By.XPATH, f"//*[normalize-space(text())='{target_value}']")
+        if elements:
+            return elements[0], "exact_text_match", {"text": target_value}
+
+    except:
+        pass
+
+    return None, "", {}
+
 
 def main():
     # Конфигурация (можно вынести в отдельный файл)
