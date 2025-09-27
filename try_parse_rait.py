@@ -70,6 +70,27 @@ def extract_metadata(driver):
         # Получаем весь текст страницы для анализа
         body_text = driver.find_element(By.TAG_NAME, "body").text
 
+        # Русское название (ищем в заголовке h1/h2 или в начале текста)
+        try:
+            # Пробуем найти заголовок с названием фильма
+            title_elements = driver.find_elements(By.XPATH, "//h1 | //h2")
+            for title_element in title_elements:
+                title_text = title_element.text.strip()
+                if title_text and 'смотреть онлайн' in title_text.lower():
+                    metadata['title'] = title_text.split('смотреть онлайн')[0].strip()
+                    break
+
+            # Если не нашли, ищем в начале body текста
+            if 'title' not in metadata:
+                first_lines = body_text.split('\n')[:10]  # Первые 10 строк
+                for line in first_lines:
+                    line = line.strip()
+                    if line and 'смотреть онлайн' in line.lower():
+                        metadata['title'] = line.split('смотреть онлайн')[0].strip()
+                        break
+        except:
+            pass
+
         # Год выхода
         year_match = re.search(r'Год выхода:\s*(\d{4})', body_text)
         if year_match:
@@ -101,13 +122,6 @@ def extract_metadata(driver):
         actors_section = extract_actors_section(body_text)
         if actors_section:
             metadata['actors'] = actors_section
-
-        # Русское название (из заголовка страницы)
-        try:
-            title_element = driver.find_element(By.XPATH, "//h1 | //h2 | //title")
-            metadata['title'] = title_element.text.split('смотреть онлайн')[0].strip()
-        except:
-            pass
 
     except Exception as e:
         metadata['error'] = f"Ошибка извлечения метаданных: {str(e)}"
