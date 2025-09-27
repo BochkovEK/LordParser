@@ -30,7 +30,7 @@ def setup_driver():
 
 def extract_movie_data(driver, url):
     """
-    Извлекает полную информацию о фильме: рейтинг + метаданные
+    Извлекает полную информацию о фильме: рейтинг + метаданные + дополнительные рейтинги
     """
     print(f"Анализирую URL: {url}")
 
@@ -41,17 +41,21 @@ def extract_movie_data(driver, url):
         )
         time.sleep(3)
 
-        # Извлекаем рейтинг
+        # Извлекаем рейтинг LordFilm
         ratings = extract_clean_ratings(driver)
 
         # Извлекаем метаданные
         metadata = extract_metadata(driver)
 
+        # Извлекаем дополнительные рейтинги (КП и IMDB)
+        additional_ratings = extract_additional_ratings(driver)
+
         return {
             "url": url,
             "success": True,
             "ratings": ratings,
-            "metadata": metadata
+            "metadata": metadata,
+            "additional_ratings": additional_ratings
         }
 
     except Exception as e:
@@ -60,6 +64,70 @@ def extract_movie_data(driver, url):
             "success": False,
             "error": str(e)
         }
+
+
+def extract_additional_ratings(driver):
+    """Извлекает рейтинги КиноПоиск (КП) и IMDB"""
+    additional_ratings = {}
+
+    try:
+        # Получаем весь текст страницы
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+
+        # Паттерны для поиска рейтингов
+        patterns = [
+            # Формат: КП 7.8, IMDB 7.5
+            (r'КП\s*(\d+\.\d+)', 'kinopoisk'),
+            (r'IMDB\s*(\d+\.\d+)', 'imdb'),
+            # Формат: КиноПоиск: 7.8, IMDb: 7.5
+            (r'КиноПоиск[:\s]*(\d+\.\d+)', 'kinopoisk'),
+            (r'IMDb[:\s]*(\d+\.\d+)', 'imdb'),
+            # Формат с русскими буквами: КП, ИМДБ
+            (r'КП[:\s]*(\d+\.\d+)', 'kinopoisk'),
+            (r'ИМДБ[:\s]*(\d+\.\d+)', 'imdb'),
+        ]
+
+        for pattern, rating_type in patterns:
+            match = re.search(pattern, body_text, re.IGNORECASE)
+            if match:
+                additional_ratings[rating_type] = float(match.group(1))
+
+        # Альтернативный поиск по элементам страницы
+        if not additional_ratings:
+            additional_ratings = find_ratings_in_elements(driver)
+
+    except Exception as e:
+        print(f"Ошибка поиска дополнительных рейтингов: {e}")
+
+    return additional_ratings
+
+
+def find_ratings_in_elements(driver):
+    """Ищет рейтинги в элементах страницы (более надежный метод)"""
+    ratings = {}
+
+    try:
+        # Ищем элементы, содержащие слова КП, IMDB и числа
+        elements = driver.find_elements(By.XPATH,
+                                        "//*[text()[contains(., 'КП') or contains(., 'IMDB') or contains(., 'КиноПоиск') or contains(., 'IMDb')]]")
+
+        for element in elements:
+            text = element.text
+
+            # Ищем КП рейтинг
+            kp_match = re.search(r'КП[:\s]*(\d+\.\d+)', text, re.IGNORECASE)
+            if kp_match and 'kinopoisk' not in ratings:
+                ratings['kinopoisk'] = float(kp_match.group(1))
+
+            # Ищем IMDB рейтинг
+            imdb_match = re.search(r'IMDB[:\s]*(\d+\.\d+)', text, re.IGNORECASE)
+            if imdb_match and 'imdb' not in ratings:
+                ratings['imdb'] = float(imdb_match.group(1))
+
+    except Exception as e:
+        print(f"Ошибка поиска в элементах: {e}")
+
+    return ratings
 
 
 def extract_metadata(driver):
@@ -204,7 +272,6 @@ def main():
                 result = extract_movie_data(driver, url_key)
                 all_results[url_key] = result
 
-                # Красивый вывод
                 if result['success']:
                     ratings = result['ratings']
                     metadata = result['metadata']
@@ -227,19 +294,20 @@ def main():
                 else:
                     print(f"❌ Ошибка: {result['error']}")
 
+
             print("=" * 60)
             time.sleep(2)
 
-        # Сохранение результатов
-        output = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "results": all_results
-        }
+            # Сохранение результатов
+            output = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "results": all_results
+            }
 
-        with open('movie_data.json', 'w', encoding='utf-8') as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
+            with open('movie_data.json', 'w', encoding='utf-8') as f:
+                json.dump(output, f, ensure_ascii=False, indent=2)
 
-        print("🎉 Парсинг завершен! Результаты в movie_data.json")
+            print("🎉 Парсинг завершен! Результаты в movie_data.json")
 
     finally:
         driver.quit()
