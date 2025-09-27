@@ -7,35 +7,10 @@ import json
 import time
 # import os
 
-# # Загружаем конфиг один раз при импорте
-# with open('config.json', 'r') as f:
-#     CONFIG = json.load(f)
-
-# SELENIUM_URL = os.getenv('SELENIUM_URL', CONFIG['selenium_url'])
-
-SELENIUM_URL = "http://localhost:4444/wd/hub"
-
-def setup_driver():
-    """Настройка Selenium WebDriver для контейнера"""
-
-
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-
-    driver = webdriver.Remote(
-        command_executor=SELENIUM_URL,
-        options=chrome_options
-    )
-    return driver
-
 
 def parse_rating(driver, url, target_values):
     """
-    Парсит рейтинг со страницы, ища целевые значения в DOM
+    Улучшенный парсинг рейтинга с multiple стратегиями поиска
     """
     print(f"Обрабатываю URL: {url}")
 
@@ -43,7 +18,7 @@ def parse_rating(driver, url, target_values):
         driver.get(url)
 
         # Ждем загрузки страницы
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 10).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
 
@@ -54,73 +29,45 @@ def parse_rating(driver, url, target_values):
 
         for i, target_value in enumerate(target_values):
             print(f"  Поиск значения: {target_value}")
+            found_element = None
+            strategy_used = ""
+            details = {}
 
-            # Стратегия 1: Ищем элемент, содержащий целевое значение
-            try:
-                # XPath для поиска элемента, содержащего текст
-                xpath = f"//*[contains(text(), '{target_value}')]"
-                element = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.XPATH, xpath))
-                )
+            # Стратегия 1: Приоритетный поиск в специфичных элементах
+            if not found_element:
+                found_element, strategy_used, details = search_in_priority_elements(driver, target_value)
+
+            # Стратегия 2: Расширенный XPath поиск
+            if not found_element:
+                found_element, strategy_used, details = search_with_xpath(driver, target_value)
+
+            # Стратегия 3: Поиск в data-атрибутах
+            if not found_element:
+                found_element, strategy_used, details = search_in_attributes(driver, target_value)
+
+            # Стратегия 4: JavaScript поиск по всему DOM
+            if not found_element:
+                found_element, strategy_used, details = search_with_javascript(driver, target_value)
+
+            # Стратегия 5: Поиск в meta тегах и скриптах
+            if not found_element:
+                found_element, strategy_used, details = search_in_metadata(driver, target_value)
+
+            if found_element:
                 results[f"value_{i}"] = {
                     "target": target_value,
                     "found": True,
-                    "element_text": element.text,
-                    "tag_name": element.tag_name,
-                    "strategy": "xpath_text_search"
+                    "strategy": strategy_used,
+                    "details": details
                 }
-                print(f"    ✓ Найдено через XPath: {element.text}")
-
-            except Exception as e:
-                # Стратегия 2: Ищем в JavaScript переменных
-                try:
-                    # Пробуем найти значение в глобальных переменных JS
-                    js_script = f"""
-                    var results = [];
-                    for (var key in window) {{
-                        try {{
-                            if (typeof window[key] === 'string' && window[key].includes('{target_value}')) {{
-                                results.push({{key: key, value: window[key]}});
-                            }}
-                            else if (typeof window[key] === 'number' && window[key].toString() === '{target_value}') {{
-                                results.push({{key: key, value: window[key]}});
-                            }}
-                        }} catch(e) {{}}
-                    }}
-                    return results.length > 0 ? results : null;
-                    """
-
-                    js_result = driver.execute_script(js_script)
-                    if js_result:
-                        results[f"value_{i}"] = {
-                            "target": target_value,
-                            "found": True,
-                            "js_variables": js_result,
-                            "strategy": "javascript_global_vars"
-                        }
-                        print(f"    ✓ Найдено в JS переменных: {js_result}")
-                    else:
-                        raise Exception("Не найдено в JS переменных")
-
-                except Exception as js_e:
-                    # Стратегия 3: Ищем в тексте страницы
-                    page_source = driver.page_source
-                    if target_value in page_source:
-                        results[f"value_{i}"] = {
-                            "target": target_value,
-                            "found": True,
-                            "location": "page_source",
-                            "strategy": "source_code_search"
-                        }
-                        print(f"    ✓ Найдено в исходном коде")
-                    else:
-                        results[f"value_{i}"] = {
-                            "target": target_value,
-                            "found": False,
-                            "error": str(e),
-                            "strategy": "all_methods_failed"
-                        }
-                        print(f"    ✗ Не найдено")
+                print(f"    ✓ Найдено ({strategy_used}): {details.get('text', '')}")
+            else:
+                results[f"value_{i}"] = {
+                    "target": target_value,
+                    "found": False,
+                    "strategies_tried": ["priority_elements", "xpath", "attributes", "javascript", "metadata"]
+                }
+                print(f"    ✗ Не найдено")
 
         return {
             "url": url,
@@ -136,71 +83,175 @@ def parse_rating(driver, url, target_values):
         }
 
 
-def main():
-    # Конфигурация (можно вынести в отдельный файл)
-    # config = {
-    #     "url": ['25', '35', '48'],
-    #     "url_2": ['string', 'string', 'string'],
-    #     "url_3": ['string', 'string', 'string']
-    # }
+def search_in_priority_elements(driver, target_value):
+    """Поиск в элементах, которые обычно содержат рейтинги/голоса"""
+    priority_selectors = [
+        '.rating', '.score', '.votes', '.rating-value', '.imdb-rating',
+        '.kinopoisk-rating', '[class*="rating"]', '[class*="score"]',
+        '[class*="vote"]', '.value', '.count', '.number'
+    ]
 
-    # Или загрузка конфига из файла
-    with open('config.json', 'r') as f:
-        config = json.load(f)
+    for selector in priority_selectors:
+        try:
+            elements = driver.find_elements(By.CSS_SELECTOR, selector)
+            for element in elements:
+                text = element.text.strip()
+                if target_value in text:
+                    return element, "priority_css", {
+                        "text": text,
+                        "selector": selector,
+                        "tag": element.tag_name
+                    }
+        except:
+            continue
 
-    driver = None
-    all_results = {}
+    return None, "", {}
+
+
+def search_with_xpath(driver, target_value):
+    """Расширенный XPath поиск"""
+    xpath_strategies = [
+        # Точное совпадение текста
+        f"//*[text()='{target_value}']",
+        # Содержит значение как подстроку
+        f"//*[contains(text(), '{target_value}')]",
+        # Ищем числа, окруженные пробелами/знаками препинания
+        f"//*[contains(., ' {target_value} ')]",
+        f"//*[contains(., '{target_value}.')]",
+        f"//*[contains(., '{target_value},')]",
+        # Поиск в span, div, strong, b (часто содержат числа)
+        f"//span[contains(., '{target_value}')]",
+        f"//div[contains(., '{target_value}')]",
+        f"//strong[contains(., '{target_value}')]",
+        f"//b[contains(., '{target_value}')]",
+    ]
+
+    for xpath in xpath_strategies:
+        try:
+            elements = driver.find_elements(By.XPATH, xpath)
+            if elements:
+                element = elements[0]
+                return element, "xpath", {
+                    "text": element.text.strip(),
+                    "xpath": xpath,
+                    "tag": element.tag_name
+                }
+        except:
+            continue
+
+    return None, "", {}
+
+
+def search_in_attributes(driver, target_value):
+    """Поиск в data-атрибутах и других атрибутах"""
+    attributes = ['data-rating', 'data-votes', 'data-score', 'data-value',
+                  'data-count', 'rating', 'votes', 'score', 'value', 'content']
+
+    for attr in attributes:
+        try:
+            # Поиск элементов с атрибутом, содержащим значение
+            elements = driver.find_elements(By.XPATH, f"//*[@{attr}='{target_value}']")
+            if not elements:
+                elements = driver.find_elements(By.XPATH, f"//*[contains(@{attr}, '{target_value}')]")
+
+            if elements:
+                element = elements[0]
+                attr_value = element.get_attribute(attr)
+                return element, "attribute", {
+                    "attribute": attr,
+                    "value": attr_value,
+                    "tag": element.tag_name,
+                    "text": element.text.strip() if element.text else ""
+                }
+        except:
+            continue
+
+    return None, "", {}
+
+
+def search_with_javascript(driver, target_value):
+    """JavaScript поиск по всему DOM"""
+    js_script = f"""
+    function findValueInPage(value) {{
+        const results = [];
+
+        // Поиск в текстовых узлах
+        const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+
+        let node;
+        while (node = walker.nextNode()) {{
+            if (node.textContent.includes(value)) {{
+                const parent = node.parentElement;
+                results.push({{
+                    type: 'text',
+                    content: node.textContent.trim(),
+                    parentHtml: parent.outerHTML.slice(0, 200),
+                    tag: parent.tagName
+                }});
+            }}
+        }}
+
+        // Поиск в атрибутах
+        const allElements = document.querySelectorAll('*');
+        for (const el of allElements) {{
+            for (const attr of el.attributes) {{
+                if (attr.value.includes(value)) {{
+                    results.push({{
+                        type: 'attribute',
+                        attribute: attr.name,
+                        value: attr.value,
+                        tag: el.tagName
+                    }});
+                }}
+            }}
+        }}
+
+        return results.slice(0, 10); // Ограничиваем количество результатов
+    }}
+
+    return findValueInPage('{target_value}');
+    """
 
     try:
-        driver = setup_driver()
+        js_results = driver.execute_script(js_script)
+        if js_results and len(js_results) > 0:
+            return True, "javascript_dom", {
+                "matches_found": len(js_results),
+                "first_match": js_results[0]
+            }
+    except:
+        pass
 
-        for url_key, target_values in config.items():
-            # Если ключ начинается с 'https', считаем его URL
-            if url_key.startswith('https'):
-                # В реальном сценарии здесь были бы настоящие URL
-                # Для примера используем заглушки
-                # actual_url = f"https://example.com/{url_key}"
-
-                result = parse_rating(driver, url_key, target_values)
-                all_results[url_key] = result
-
-                # Пауза между запросами
-                time.sleep(1)
-
-        # Сохраняем результаты
-        output = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "results": all_results
-        }
-
-        with open('parsing_results.json', 'w', encoding='utf-8') as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-
-        print("\n" + "=" * 50)
-        print("ПАРСИНГ ЗАВЕРШЕН")
-        print("=" * 50)
-
-        # Краткая статистика
-        total_urls = len(all_results)
-        successful_urls = sum(1 for r in all_results.values() if r.get('success', False))
-        total_values = sum(len(config[key]) for key in config if key.startswith('url'))
-        found_values = 0
-
-        for url_result in all_results.values():
-            if url_result.get('success') and 'results' in url_result:
-                found_values += sum(1 for r in url_result['results'].values() if r.get('found', False))
-
-        print(f"Обработано URL: {successful_urls}/{total_urls}")
-        print(f"Найдено значений: {found_values}/{total_values}")
-        print(f"Результаты сохранены в: parsing_results.json")
-
-    except Exception as e:
-        print(f"Критическая ошибка: {e}")
-
-    finally:
-        if driver:
-            driver.quit()
+    return None, "", {}
 
 
-if __name__ == "__main__":
-    main()
+def search_in_metadata(driver, target_value):
+    """Поиск в meta тегах и script тегах"""
+    try:
+        # Поиск в meta тегах
+        meta_elements = driver.find_elements(By.XPATH, f"//meta[contains(@content, '{target_value}')]")
+        if meta_elements:
+            element = meta_elements[0]
+            return element, "meta_tag", {
+                "name": element.get_attribute("name") or element.get_attribute("property"),
+                "content": element.get_attribute("content")
+            }
+
+        # Поиск в script тегах (переменные JavaScript)
+        script_elements = driver.find_elements(By.TAG_NAME, "script")
+        for script in script_elements:
+            script_content = script.get_attribute("innerHTML")
+            if script_content and target_value in script_content:
+                return script, "script_tag", {
+                    "snippet": script_content[:500]  # Первые 500 символов
+                }
+
+    except:
+        pass
+
+    return None, "", {}
