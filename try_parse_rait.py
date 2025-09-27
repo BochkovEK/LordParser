@@ -255,3 +255,72 @@ def search_in_metadata(driver, target_value):
         pass
 
     return None, "", {}
+
+def main():
+    # Конфигурация (можно вынести в отдельный файл)
+    # config = {
+    #     "url": ['25', '35', '48'],
+    #     "url_2": ['string', 'string', 'string'],
+    #     "url_3": ['string', 'string', 'string']
+    # }
+
+    # Или загрузка конфига из файла
+    with open('config.json', 'r') as f:
+        config = json.load(f)
+
+    driver = None
+    all_results = {}
+
+    try:
+        driver = setup_driver()
+
+        for url_key, target_values in config.items():
+            # Если ключ начинается с 'https', считаем его URL
+            if url_key.startswith('https'):
+                # В реальном сценарии здесь были бы настоящие URL
+                # Для примера используем заглушки
+                # actual_url = f"https://example.com/{url_key}"
+
+                result = parse_rating(driver, url_key, target_values)
+                all_results[url_key] = result
+
+                # Пауза между запросами
+                time.sleep(1)
+
+        # Сохраняем результаты
+        output = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "results": all_results
+        }
+
+        with open('parsing_results.json', 'w', encoding='utf-8') as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+
+        print("\n" + "=" * 50)
+        print("ПАРСИНГ ЗАВЕРШЕН")
+        print("=" * 50)
+
+        # Краткая статистика
+        total_urls = len(all_results)
+        successful_urls = sum(1 for r in all_results.values() if r.get('success', False))
+        total_values = sum(len(config[key]) for key in config if key.startswith('url'))
+        found_values = 0
+
+        for url_result in all_results.values():
+            if url_result.get('success') and 'results' in url_result:
+                found_values += sum(1 for r in url_result['results'].values() if r.get('found', False))
+
+        print(f"Обработано URL: {successful_urls}/{total_urls}")
+        print(f"Найдено значений: {found_values}/{total_values}")
+        print(f"Результаты сохранены в: parsing_results.json")
+
+    except Exception as e:
+        print(f"Критическая ошибка: {e}")
+
+    finally:
+        if driver:
+            driver.quit()
+
+
+if __name__ == "__main__":
+    main()
