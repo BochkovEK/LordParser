@@ -126,3 +126,7 @@ sudo podman run -d \
   -e "CONCURRENT_SESSIONS=5" \
   browserless/chrome:latest
 
+# ==========================================================
+# Активируем окружение и запускаем
+python scripts/init_db.py
+

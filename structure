@@ -1,0 +1,193 @@
+🏗️ Финальная архитектура проекта:
+text
+movie_parser/
+├── docker-compose.yml
+├── .env
+├── requirements.txt
+├── src/
+│   ├── __init__.py
+│   ├── main.py                 # Точка входа
+│   ├── config/
+│   │   ├── __init__.py
+│   │   ├── settings.py        # Настройки (URL, годы, страницы)
+│   │   └── scheduler.py       # Расписание (00:00 daily, 00:00 Sunday)
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── models.py          # Модели БД (films, parsing_sessions)
+│   │   ├── connection.py
+│   │   └── operations.py      # CRUD операции
+│   ├── parser/
+│   │   ├── __init__.py
+│   │   ├── base_parser.py     # Базовый класс с кэшированием
+│   │   ├── link_parser.py     # Этап 1: сбор ссылок (пачки по 100)
+│   │   └── film_parser.py     # Этап 2: детали фильмов (пачки по 10)
+│   ├── scheduler/
+│   │   ├── __init__.py
+│   │   ├── tasks.py           # Ежедневные/еженедельные задачи
+│   │   └── runner.py          # Запуск по расписанию
+│   ├── utils/
+│       ├── __init__.py
+│       ├── logger.py          # Логирование
+│       ├── retry.py           # Повторные попытки (2 попытки)
+│       └── cache.py           # In-memory кэш
+├── scripts/
+│   ├── init_db.py            # Инициализация БД
+│   └── test_parsing.py       # Тест парсинга
+└── logs/
+    ├── parser.log
+    └── scheduler.log
+⚙️ Конфигурация:
+config/settings.py:
+
+python
+# Парсинг
+DEFAULT_URL = "https://wk.lordfilm17.ru"
+DEFAULT_CATEGORY = "filmy"
+YEAR_RANGE = (2016, 2025)
+DAILY_PAGES = 50    # Для 2025
+WEEKLY_PAGES = 50   # Для всех лет
+
+# Пачки
+LINKS_BATCH_SIZE = 100
+FILMS_BATCH_SIZE = 10
+
+# Паузы
+BATCH_DELAY = 1     # 1 сек для ссылок
+FILM_DELAY = 2      # 2 сек для фильмов
+
+# Повторы
+MAX_RETRIES = 2
+RETRY_DELAY = 5
+🕐 Расписание:
+config/scheduler.py:
+
+python
+SCHEDULE = {
+    'daily': {
+        'time': '00:00',
+        'years': [2024, 2025],    # Только последние годы
+        'pages': 50,
+        'type': 'daily'
+    },
+    'weekly': {
+        'time': '00:00',
+        'day': 'sunday',          # Каждое воскресенье
+        'years': 'all',           # Все годы 2016-2025
+        'pages': 50,
+        'type': 'weekly'
+    }
+}
+🔄 Логика обработки ошибок:
+utils/retry.py:
+
+python
+def retry_on_failure(max_retries=2):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_retries:
+                        logger.error(f"Failed after {max_retries} attempts: {e}")
+                        raise
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying...")
+                    time.sleep(RETRY_DELAY)
+        return wrapper
+    return decorator
+📊 Мониторинг через логи:
+Логи будут содержать:
+
+Старт/завершение парсинга
+
+Количество обработанных страниц/фильмов
+
+Ошибки с повторными попытками
+
+Время выполнения
+
+Сущности базы данных:
+1. Films (основная таблица)
+python
+# films - информация о фильмах
+id: int (PK)
+url: str (UNIQUE)              # уникальный URL фильма на LordFilm
+title: str                     # русское название
+original_title: str            # оригинальное название
+year: int                      # год выпуска
+country: str                   # страна производства
+categories: List[str]          # массив категорий ['Боевик', 'Фантастика']
+director: str                  # режиссер
+actors: List[str]              # массив актеров
+description: str               # описание сюжета
+
+# Рейтинги
+lf_rating: float               # рейтинг LordFilm (5.4)
+lf_likes: int                  # лайки (378)
+lf_dislikes: int               # дизлайки (322)
+kp_rating: float               # КиноПоиск
+imdb_rating: float             # IMDB
+
+# Системные поля
+is_active: bool                # активен ли фильм на сайте
+first_seen_at: datetime        # когда впервые обнаружен
+last_updated_at: datetime      # когда последний раз обновляли
+created_at: datetime           # когда создали запись
+2. ParsingSessions (сессии парсинга)
+python
+# parsing_sessions - история запусков парсера
+id: int (PK)
+session_type: str              # 'daily' | 'weekly'
+years_parsed: str              # '2025' или '2016-2025'
+pages_per_year: int            # 50 или 10
+status: str                    # 'running' | 'completed' | 'failed'
+
+# Статистика
+links_found: int               # сколько ссылок найдено
+films_processed: int           # сколько фильмов обработано
+new_films_added: int           # сколько новых фильмов добавлено
+existing_films_updated: int    # сколько существующих обновлено
+
+# Временные метки
+started_at: datetime
+completed_at: datetime
+3. ParsingHistory (детальная история)
+python
+# parsing_history - детальная история по каждому фильму
+id: int (PK)
+film_id: int (FK → films.id)   # ссылка на фильм
+session_id: int (FK → parsing_sessions.id) # ссылка на сессию
+
+# Результат парсинга
+parsing_type: str              # 'links' | 'film_details'
+success: bool                  # успешно ли распарсили
+error_message: str             # текст ошибки (если была)
+
+# Данные
+data_processed: JSON           # сырые данные (для дебага)
+parsed_at: datetime
+🔗 Связи между таблицами:
+text
+ParsingSessions (1) → (Many) ParsingHistory (Many) → (1) Films
+
+🚀 Запуск тестирования:
+
+bash
+# Запуск
+nohup python src/main.py > parser.log 2>&1 &
+
+# Проверить
+ps aux | grep python
+tail -f parser.log
+
+# Остановить
+pkill -f "python src/main.py"
+
+# Инициализация БД
+python scripts/init_db.py
+
+# Тестовый парсинг
+python scripts/test_parsing.py
+
+# Запуск планировщика
+python src/main.py

@@ -1,9 +1,9 @@
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from parser.lordfilm_parser import LordFilmParser
+from tmp.parser import LordFilmParser
 import json
-from config import (  # Импортируем все необходимые константы
+from tmp.config import (  # Импортируем все необходимые константы
     BOT_TOKEN,
     DEFAULT_URL,
     DEFAULT_PAGES,

@@ -3,11 +3,11 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import psycopg2
-from config import (
+from tmp.config import (
     DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT,
     DEFAULT_PAGES, DEFAULT_YEAR, DEFAULT_DEBUG, DEFAULT_URL
 )
-from parser.lordfilm_parser import LordFilmParser
+from tmp.parser import LordFilmParser
 
 # Настройка логгирования
 logging.basicConfig(

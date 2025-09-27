@@ -259,7 +259,7 @@ def extract_clean_ratings(driver):
 def main():
 
     # Или загрузка конфига из файла
-    with open('config.json', 'r') as f:
+    with open('../tmp/config.json', 'r') as f:
         config = json.load(f)
 
     driver = setup_driver()

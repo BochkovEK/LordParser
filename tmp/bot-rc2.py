@@ -2,8 +2,7 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import psycopg2
-import json
-from config import (  # Импортируем все необходимые константы
+from tmp.config import (  # Импортируем все необходимые константы
     BOT_TOKEN,
     DEFAULT_URL,
     DEFAULT_PAGES,
