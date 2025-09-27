@@ -7,6 +7,24 @@ import json
 import time
 # import os
 
+SELENIUM_URL = "http://localhost:4444/wd/hub"
+
+def setup_driver():
+    """Настройка Selenium WebDriver для контейнера"""
+
+
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+
+    driver = webdriver.Remote(
+        command_executor=SELENIUM_URL,
+        options=chrome_options
+    )
+    return driver
 
 def parse_rating(driver, url, target_values):
     """
