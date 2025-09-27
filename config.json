@@ -1,5 +1,8 @@
 {
+  "selenium_url": "http://localhost:4444/wd/hub",
   "https://wk.lordfilm17.ru/filmy/53680-nikto-2-2025.html": ["570", "8.2", "126"],
   "https://wk.lordfilm17.ru/filmy/53592-fantasticheskaja-chetverka-pervye-shagi-2025.html": ["376", "5.4", "319"],
   "https://wk.lordfilm17.ru/filmy/53544-supermen-2025.html": ["598", "5.1", "567"]
 }
+
+

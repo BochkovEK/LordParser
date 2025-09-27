@@ -5,11 +5,18 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import json
 import time
-import sys
+import os
 
+# Загружаем конфиг один раз при импорте
+with open('config.json', 'r') as f:
+    CONFIG = json.load(f)
+
+SELENIUM_URL = os.getenv('SELENIUM_URL', CONFIG['selenium_url'])
 
 def setup_driver():
     """Настройка Selenium WebDriver для контейнера"""
+
+
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -18,7 +25,7 @@ def setup_driver():
     chrome_options.add_argument("--window-size=1920,1080")
 
     driver = webdriver.Remote(
-        command_executor='http://selenium:4444/wd/hub',
+        command_executor=SELENIUM_URL,
         options=chrome_options
     )
     return driver
@@ -143,7 +150,7 @@ def main():
     all_results = {}
 
     try:
-        driver = setup_driver()
+        driver = setup_driver(BROWSERLESS_URL)
 
         for url_key, target_values in config.items():
             # Если ключ начинается с 'url', считаем его URL
