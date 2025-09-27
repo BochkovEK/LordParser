@@ -413,7 +413,7 @@ def main():
         # Краткая статистика
         total_urls = len(all_results)
         successful_urls = sum(1 for r in all_results.values() if r.get('success', False))
-        total_values = sum(len(config[key]) for key in config if key.startswith('url'))
+        total_values = sum(len(config[key]) for key in config if key.startswith('https'))
         found_values = 0
 
         for url_result in all_results.values():
