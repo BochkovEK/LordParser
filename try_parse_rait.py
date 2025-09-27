@@ -155,13 +155,13 @@ def main():
         driver = setup_driver()
 
         for url_key, target_values in config.items():
-            # Если ключ начинается с 'url', считаем его URL
-            if url_key.startswith('url'):
+            # Если ключ начинается с 'https', считаем его URL
+            if url_key.startswith('https'):
                 # В реальном сценарии здесь были бы настоящие URL
                 # Для примера используем заглушки
-                actual_url = f"https://example.com/{url_key}"
+                # actual_url = f"https://example.com/{url_key}"
 
-                result = parse_rating(driver, actual_url, target_values)
+                result = parse_rating(driver, url_key, target_values)
                 all_results[url_key] = result
 
                 # Пауза между запросами
