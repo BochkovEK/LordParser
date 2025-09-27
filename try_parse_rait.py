@@ -150,7 +150,7 @@ def main():
     all_results = {}
 
     try:
-        driver = setup_driver(BROWSERLESS_URL)
+        driver = setup_driver()
 
         for url_key, target_values in config.items():
             # Если ключ начинается с 'url', считаем его URL
