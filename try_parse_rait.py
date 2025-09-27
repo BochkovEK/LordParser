@@ -27,7 +27,6 @@ def setup_driver():
     )
     return driver
 
-
 def extract_rating_numbers(driver, url):
     """
     Автоматически находит числа рейтинга на странице фильма
@@ -41,16 +40,13 @@ def extract_rating_numbers(driver, url):
         )
         time.sleep(3)
 
-        # Стратегия 1: Ищем блоки с числами, похожие на рейтинг
-        candidate_elements = find_rating_candidates(driver)
-
-        # Стратегия 2: Анализируем и фильтруем найденные числа
-        rating_data = analyze_rating_patterns(candidate_elements)
+        # Получаем чистые числа рейтинга
+        ratings = extract_clean_ratings(driver)
 
         return {
             "url": url,
             "success": True,
-            "ratings": rating_data
+            "ratings": ratings
         }
 
     except Exception as e:
@@ -61,108 +57,43 @@ def extract_rating_numbers(driver, url):
         }
 
 
-def find_rating_candidates(driver):
-    """Находит элементы-кандидаты содержащие числа рейтинга"""
-    candidates = []
-
-    # Ищем элементы с небольшим текстом (только числа или короткий текст)
-    all_elements = driver.find_elements(By.XPATH, "//*[text()]")
-
-    for element in all_elements:
-        try:
-            text = element.text.strip()
-            if not text or len(text) > 50:  # Слишком длинный текст пропускаем
-                continue
-
-            # Ищем числа в тексте
-            numbers = re.findall(r'\d+\.?\d*', text)
-            if numbers:
-                candidates.append({
-                    'element': element,
-                    'text': text,
-                    'numbers': numbers,
-                    'tag': element.tag_name,
-                    'class': element.get_attribute('class') or ''
-                })
-        except:
-            continue
-
-    return candidates
-
-
-def analyze_rating_patterns(candidates):
-    """Анализирует кандидатов и определяет числа рейтинга"""
-    rating_patterns = []
-
-    # Группируем элементы по их расположению (ищем группы чисел)
-    position_groups = {}
-    for candidate in candidates:
-        try:
-            location = candidate['element'].location
-            y_pos = location['y']
-
-            # Группируем по вертикальной позиции (элементы в одной строке)
-            group_key = y_pos // 10  # Группируем с допуском 10px
-
-            if group_key not in position_groups:
-                position_groups[group_key] = []
-            position_groups[group_key].append(candidate)
-        except:
-            continue
-
-    # Анализируем группы элементов
-    for group_key, group_candidates in position_groups.items():
-        if len(group_candidates) >= 2:  # Группа из нескольких чисел
-            all_numbers = []
-            for candidate in group_candidates:
-                all_numbers.extend(candidate['numbers'])
-
-            # Фильтруем по типичным паттернам рейтинга
-            if is_rating_pattern(all_numbers):
-                rating_patterns.append({
-                    'type': 'group_pattern',
-                    'numbers': all_numbers,
-                    'count': len(group_candidates),
-                    'elements': [c['text'] for c in group_candidates]
-                })
-
-    # Также ищем одиночные элементы с типичными значениями рейтинга
-    for candidate in candidates:
-        for number in candidate['numbers']:
-            if is_single_rating_value(number):
-                rating_patterns.append({
-                    'type': 'single_value',
-                    'number': number,
-                    'context': candidate['text'],
-                    'tag': candidate['tag']
-                })
-
-    return rating_patterns
-
-
-def is_rating_pattern(numbers):
-    """Определяет, похож ли набор чисел на рейтинг"""
-    if len(numbers) < 2:
-        return False
-
-    # Паттерн: рейтинг (с точкой) + целые числа
-    has_decimal = any('.' in str(num) for num in numbers)
-    has_integers = any('.' not in str(num) for num in numbers)
-
-    # Типичные значения рейтинга (0-10)
-    rating_values = [float(num) for num in numbers if '.' in str(num) and 0 <= float(num) <= 10]
-
-    return (has_decimal and has_integers) or len(rating_values) > 0
-
-
-def is_single_rating_value(number_str):
-    """Проверяет, похоже ли число на значение рейтинга"""
+def extract_clean_ratings(driver):
+    """Извлекает чистые значения рейтинга: лайки, дизлайки, рейтинг"""
     try:
-        num = float(number_str)
-        # Рейтинги обычно от 0 до 10, количество голосов может быть больше
-        return 0 <= num <= 10 or (num > 10 and num < 10000)
-    except:
-        return False
+        # Ищем блок с числами в формате: число число число.число число
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+
+        # Паттерн: ищем последовательность из 3 чисел (лайки, рейтинг, дизлайки)
+        rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+
+        if rating_pattern:
+            likes, rating, dislikes = rating_pattern[0]
+            return {
+                "likes": int(likes),
+                "rating": float(rating),
+                "dislikes": int(dislikes)
+            }
+
+        # Альтернативный паттерн: ищем числа рядом друг с другом
+        elements = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
+        for element in elements:
+            text = element.text.strip()
+            numbers = re.findall(r'\d+\.?\d*', text)
+
+            # Ищем паттерн: целое число, число с точкой, целое число
+            if len(numbers) >= 3:
+                for i in range(len(numbers) - 2):
+                    if '.' in numbers[i + 1] and '.' not in numbers[i] and '.' not in numbers[i + 2]:
+                        return {
+                            "likes": int(numbers[i]),
+                            "rating": float(numbers[i + 1]),
+                            "dislikes": int(numbers[i + 2])
+                        }
+
+        return {"error": "Рейтинг не найден"}
+
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # Основная функция
@@ -182,25 +113,29 @@ def main():
                 result = extract_rating_numbers(driver, url_key)
                 all_results[url_key] = result
 
-                # Вывод предварительных результатов
+                # Чистый вывод
                 if result['success']:
-                    print(f"Найдено паттернов: {len(result['ratings'])}")
-                    for i, rating in enumerate(result['ratings']):
-                        print(f"  Паттерн {i + 1}: {rating}")
+                    ratings = result['ratings']
+                    if 'error' not in ratings:
+                        print(f"Лайки: {ratings['likes']}, Рейтинг: {ratings['rating']}, Дизлайки: {ratings['dislikes']}")
+                    else:
+                        print(f"Ошибка: {ratings['error']}")
+                else:
+                    print(f"Ошибка загрузки: {result['error']}")
+
                 print("-" * 50)
+                time.sleep(2)
 
-            time.sleep(2)
+            # Сохранение результатов
+            output = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "results": all_results
+            }
 
-        # Сохранение результатов
-        output = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "results": all_results
-        }
+            with open('clean_ratings.json', 'w', encoding='utf-8') as f:
+                json.dump(output, f, ensure_ascii=False, indent=2)
 
-        with open('auto_ratings.json', 'w', encoding='utf-8') as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-
-        print("Автопоиск завершен! Результаты в auto_ratings.json")
+            print("Парсинг завершен! Результаты в clean_ratings.json")
 
     finally:
         driver.quit()
