@@ -27,9 +27,10 @@ def setup_driver():
     )
     return driver
 
-def extract_rating_numbers(driver, url):
+
+def extract_movie_data(driver, url):
     """
-    Автоматически находит числа рейтинга на странице фильма
+    Извлекает полную информацию о фильме: рейтинг + метаданные
     """
     print(f"Анализирую URL: {url}")
 
@@ -40,13 +41,17 @@ def extract_rating_numbers(driver, url):
         )
         time.sleep(3)
 
-        # Получаем чистые числа рейтинга
+        # Извлекаем рейтинг
         ratings = extract_clean_ratings(driver)
+
+        # Извлекаем метаданные
+        metadata = extract_metadata(driver)
 
         return {
             "url": url,
             "success": True,
-            "ratings": ratings
+            "ratings": ratings,
+            "metadata": metadata
         }
 
     except Exception as e:
@@ -57,13 +62,101 @@ def extract_rating_numbers(driver, url):
         }
 
 
-def extract_clean_ratings(driver):
-    """Извлекает чистые значения рейтинга: лайки, дизлайки, рейтинг"""
+def extract_metadata(driver):
+    """Извлекает метаданные фильма со страницы"""
+    metadata = {}
+
     try:
-        # Ищем блок с числами в формате: число число число.число число
+        # Получаем весь текст страницы для анализа
         body_text = driver.find_element(By.TAG_NAME, "body").text
 
-        # Паттерн: ищем последовательность из 3 чисел (лайки, рейтинг, дизлайки)
+        # Год выхода
+        year_match = re.search(r'Год выхода:\s*(\d{4})', body_text)
+        if year_match:
+            metadata['year'] = year_match.group(1)
+
+        # Страна
+        country_match = re.search(r'Страна:\s*([^\n]+)', body_text)
+        if country_match:
+            metadata['country'] = country_match.group(1).strip()
+
+        # Оригинальное название
+        original_title_match = re.search(r'Оригинальное название:\s*([^\n]+)', body_text)
+        if original_title_match:
+            metadata['original_title'] = original_title_match.group(1).strip()
+
+        # Категории
+        categories_match = re.search(r'Категории?:\s*([^\n]+)', body_text, re.IGNORECASE)
+        if categories_match:
+            categories_text = categories_match.group(1).strip()
+            # Разделяем категории по слешам
+            metadata['categories'] = [cat.strip() for cat in categories_text.split('/')]
+
+        # Режиссер
+        director_match = re.search(r'Режиссер:\s*([^\n]+)', body_text)
+        if director_match:
+            metadata['director'] = director_match.group(1).strip()
+
+        # Актеры (многострочный поиск)
+        actors_section = extract_actors_section(body_text)
+        if actors_section:
+            metadata['actors'] = actors_section
+
+        # Русское название (из заголовка страницы)
+        try:
+            title_element = driver.find_element(By.XPATH, "//h1 | //h2 | //title")
+            metadata['title'] = title_element.text.split('смотреть онлайн')[0].strip()
+        except:
+            pass
+
+    except Exception as e:
+        metadata['error'] = f"Ошибка извлечения метаданных: {str(e)}"
+
+    return metadata
+
+
+def extract_actors_section(body_text):
+    """Извлекает список актеров (сложный многострочный поиск)"""
+    try:
+        # Ищем блок после "Актеры:" до следующего заголовка
+        lines = body_text.split('\n')
+        actors_started = False
+        actors_lines = []
+
+        for line in lines:
+            line = line.strip()
+
+            if 'Актеры:' in line:
+                actors_started = True
+                # Убираем "Актеры:" из начала строки
+                actor_line = line.replace('Актеры:', '').strip()
+                if actor_line:
+                    actors_lines.append(actor_line)
+                continue
+
+            if actors_started:
+                # Останавливаемся на следующем заголовке или пустой строке
+                if not line or line in ['Поиск по параметрам', 'Выберите жанр', 'Выберите страну']:
+                    break
+                actors_lines.append(line)
+
+        if actors_lines:
+            # Объединяем все строки и разбиваем по запятым/точкам
+            all_actors_text = ' '.join(actors_lines)
+            # Разделяем актеров (предполагаем разделение запятыми)
+            actors = [actor.strip() for actor in re.split(r'[,\n]', all_actors_text) if actor.strip()]
+            return actors[:20]  # Ограничиваем список
+
+    except Exception as e:
+        print(f"Ошибка извлечения актеров: {e}")
+
+    return None
+
+
+def extract_clean_ratings(driver):
+    """Извлекает чистые значения рейтинга"""
+    try:
+        body_text = driver.find_element(By.TAG_NAME, "body").text
         rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
 
         if rating_pattern:
@@ -73,22 +166,6 @@ def extract_clean_ratings(driver):
                 "rating": float(rating),
                 "dislikes": int(dislikes)
             }
-
-        # Альтернативный паттерн: ищем числа рядом друг с другом
-        elements = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
-        for element in elements:
-            text = element.text.strip()
-            numbers = re.findall(r'\d+\.?\d*', text)
-
-            # Ищем паттерн: целое число, число с точкой, целое число
-            if len(numbers) >= 3:
-                for i in range(len(numbers) - 2):
-                    if '.' in numbers[i + 1] and '.' not in numbers[i] and '.' not in numbers[i + 2]:
-                        return {
-                            "likes": int(numbers[i]),
-                            "rating": float(numbers[i + 1]),
-                            "dislikes": int(numbers[i + 2])
-                        }
 
         return {"error": "Рейтинг не найден"}
 
@@ -110,36 +187,48 @@ def main():
         for url_key, target_values in config.items():
             # Если ключ начинается с 'https', считаем его URL
             if url_key.startswith('https'):
-                result = extract_rating_numbers(driver, url_key)
+                result = extract_movie_data(driver, url_key)
                 all_results[url_key] = result
 
-                # Чистый вывод
+                # Красивый вывод
                 if result['success']:
                     ratings = result['ratings']
+                    metadata = result['metadata']
+
+                    print(f"🎬 {metadata.get('title', 'Название не найдено')}")
+                    print(f"📅 Год: {metadata.get('year', 'Не указан')}")
+                    print(f"🌍 Страна: {metadata.get('country', 'Не указана')}")
+                    print(f"🔤 Оригинал: {metadata.get('original_title', 'Не указано')}")
+                    print(f"🎭 Режиссер: {metadata.get('director', 'Не указан')}")
+                    print(f"📊 Категории: {', '.join(metadata.get('categories', []))}")
+
                     if 'error' not in ratings:
-                        print(f"Лайки: {ratings['likes']}, Рейтинг: {ratings['rating']}, Дизлайки: {ratings['dislikes']}")
+                        print(f"⭐ Рейтинг: {ratings['rating']} (👍 {ratings['likes']} 👎 {ratings['dislikes']})")
                     else:
-                        print(f"Ошибка: {ratings['error']}")
+                        print(f"⭐ Рейтинг: {ratings['error']}")
+
+                    if metadata.get('actors'):
+                        print(f"🎭 Актеры: {', '.join(metadata['actors'][:5])}...")
+
                 else:
-                    print(f"Ошибка загрузки: {result['error']}")
+                    print(f"❌ Ошибка: {result['error']}")
 
-                print("-" * 50)
-                time.sleep(2)
+            print("=" * 60)
+            time.sleep(2)
 
-            # Сохранение результатов
-            output = {
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "results": all_results
-            }
+        # Сохранение результатов
+        output = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "results": all_results
+        }
 
-            with open('clean_ratings.json', 'w', encoding='utf-8') as f:
-                json.dump(output, f, ensure_ascii=False, indent=2)
+        with open('movie_data.json', 'w', encoding='utf-8') as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
 
-            print("Парсинг завершен! Результаты в clean_ratings.json")
+        print("🎉 Парсинг завершен! Результаты в movie_data.json")
 
     finally:
         driver.quit()
-
 
 if __name__ == "__main__":
     main()
