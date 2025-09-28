@@ -1,9 +1,9 @@
 # page pattern: https://wk.lordfilm17.ru/filmy/2025/page/2/
 
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
-load_dotenv()  # Загружаем переменные из .env
+# load_dotenv()  # Загружаем переменные из .env
 
 # Настройки БД
 DB_CONFIG = {
