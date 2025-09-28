@@ -153,7 +153,12 @@ sudo podman run -d \
 # ==========================================================
 # Активируем оvenvкружение и запускаем инициализацию БД
 python scripts/init_db.py
+или
+# Пересоздать DB
+python scripts/recreate_db.py
 
 # Тестируем генератор ссылок
 python scripts/test_url_generator.py
 
+# Тестируем парсер ссылок
+python scripts/test_link_parser.py
