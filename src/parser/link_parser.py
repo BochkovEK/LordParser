@@ -11,6 +11,8 @@ import time
 import logging
 from typing import List, Optional
 
+# Импорты ВНЕ класса
+from src.config.settings import SELENIUM_URL
 from src.parser.url_generator import URLGenerator
 from src.database.connection import db_manager
 from src.database.models import Film, ParsingSession, ParsingHistory
@@ -30,8 +32,6 @@ class LinkParser:
 
     def setup_driver(self) -> None:
         """Настройка Selenium WebDriver"""
-        from config.settings import SELENIUM_URL
-
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -41,7 +41,7 @@ class LinkParser:
 
         try:
             self.driver = webdriver.Remote(
-                command_executor=SELENIUM_URL,
+                command_executor=SELENIUM_URL,  # Используем глобальную переменную
                 options=chrome_options
             )
             logger.info("✅ Selenium WebDriver инициализирован")
