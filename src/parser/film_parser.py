@@ -48,15 +48,7 @@ class FilmParser:
 
     @retry_on_failure(max_retries=2)
     def parse_film_details(self, film_url: str) -> Dict[str, Any]:
-        """
-        Парсит детальную информацию о фильме
-
-        Args:
-            film_url: URL страницы фильма
-
-        Returns:
-            Словарь с данными фильма
-        """
+        """Парсит детальную информацию о фильме"""
         if not self.driver:
             self.setup_driver()
 
@@ -251,59 +243,6 @@ class FilmParser:
         except Exception as e:
             logger.debug(f"Ошибка извлечения LF дизлайков: {e}")
             return None
-
-    # DEBUG ВЕРСИИ МЕТОДОВ
-    def _extract_lf_rating_debug(self) -> dict:
-        """Debug версия: извлекает рейтинг LordFilm с информацией о стратегиях"""
-        result = {
-            'rating': None,
-            'likes': None,
-            'dislikes': None,
-            'strategy': None,
-            'debug_info': '',
-            'all_matches': []
-        }
-
-        try:
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-
-            # Стратегия 1: Паттерн "число число.число число"
-            pattern1 = r'(\d+)\s+(\d+\.\d+)\s+(\d+)'
-            matches1 = re.findall(pattern1, body_text)
-            result['all_matches'].append(f"pattern1: {matches1}")
-
-            if matches1:
-                likes, rating, dislikes = matches1[0]
-                result['rating'] = float(rating)
-                result['likes'] = int(likes)
-                result['dislikes'] = int(dislikes)
-                result['strategy'] = 'regex_triple_pattern'
-                result['debug_info'] = f"Найден по паттерну: число число.число число"
-                return result
-
-            # Стратегия 2: Поиск в элементах
-            rating_elements = self.driver.find_elements(By.CSS_SELECTOR,
-                                                        "[class*='rating'], [class*='like'], [class*='dislike']")
-
-            for element in rating_elements:
-                text = element.text.strip()
-                result['all_matches'].append(f"element_{element.get_attribute('class')}: {text}")
-
-                numbers = re.findall(r'\d+', text)
-                if len(numbers) >= 3:
-                    result['likes'] = int(numbers[0])
-                    result['rating'] = float(f"{numbers[1]}.{numbers[2]}")
-                    result['dislikes'] = int(numbers[3]) if len(numbers) > 3 else None
-                    result['strategy'] = 'element_class_triple'
-                    result['debug_info'] = f"Найден в элементе: {element.get_attribute('class')}"
-                    return result
-
-            result['debug_info'] = "Рейтинг не найден"
-
-        except Exception as e:
-            result['debug_info'] = f"Ошибка: {str(e)}"
-
-        return result
 
     def _extract_kp_rating(self) -> Optional[float]:
         """Извлекает рейтинг КиноПоиск"""
