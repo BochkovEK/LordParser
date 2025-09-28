@@ -117,13 +117,6 @@ class LinkParser:
     def save_links_to_db(self, links: List[str], session_id: int) -> int:
         """
         Сохраняет ссылки в базу данных
-
-        Args:
-            links: Список URL фильмов
-            session_id: ID сессии парсинга
-
-        Returns:
-            Количество новых фильмов
         """
         session = db_manager.get_session()
         new_films = 0
@@ -134,11 +127,10 @@ class LinkParser:
                 existing_film = session.query(Film).filter(Film.url == link).first()
 
                 if not existing_film:
-                    # Создаем новый фильм
                     film = Film(
                         url=link,
-                        is_active=True,
-                        first_seen_at=time.time()
+                        is_active=True
+                        # first_seen_at будет автоматически установлен в datetime.utcnow()
                     )
                     session.add(film)
                     new_films += 1
