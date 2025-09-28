@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.options import Options
 import json
 import time
+import os
 
 SELENIUM_URL = "http://localhost:4444/wd/hub"
 
@@ -45,8 +46,26 @@ def extract_ratings_from_elements(driver):
     return ratings
 
 
+def save_html_content(driver, url, output_dir="html_pages"):
+    """Сохраняет HTML контент страницы для анализа"""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Создаем безопасное имя файла из URL
+    filename = url.replace('https://', '').replace('http://', '').replace('/', '_')[:100] + ".html"
+    filepath = os.path.join(output_dir, filename)
+
+    html_content = driver.page_source
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    print(f"💾 HTML сохранен: {filepath}")
+    return filepath
+
+
 def extract_movie_data(driver, url):
-    """Извлекает информацию о фильме"""
+    """Извлекает информацию о фильме и сохраняет HTML для анализа"""
     print(f"Анализирую URL: {url}")
 
     try:
@@ -56,12 +75,17 @@ def extract_movie_data(driver, url):
         )
         time.sleep(2)
 
+        # Извлекаем рейтинги
         ratings = extract_ratings_from_elements(driver)
+
+        # Сохраняем HTML для ручного анализа
+        html_file = save_html_content(driver, url)
 
         return {
             "url": url,
             "success": True,
-            "ratings": ratings
+            "ratings": ratings,
+            "html_saved": html_file
         }
 
     except Exception as e:
@@ -91,10 +115,11 @@ def main():
                     print(f"📊 Рейтинги для {url_key}:")
                     print(f"👍 Лайки: {ratings.get('likes', 'Не найдены')}")
                     print(f"👎 Дизлайки: {ratings.get('dislikes', 'Не найдены')}")
+                    print(f"💾 HTML сохранен: {result['html_saved']}")
                 else:
                     print(f"❌ Ошибка: {result['error']}")
 
-                print("=" * 40)
+                print("=" * 50)
                 time.sleep(1)
 
         # Сохранение результатов
@@ -106,7 +131,9 @@ def main():
         with open('movie_data.json', 'w', encoding='utf-8') as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
 
-        print("🎉 Парсинг завершен! Результаты в movie_data.json")
+        print("🎉 Парсинг завершен!")
+        print("📁 HTML страницы сохранены в папку 'html_pages'")
+        print("📊 Результаты в 'movie_data.json'")
 
     finally:
         driver.quit()

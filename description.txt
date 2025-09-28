@@ -158,7 +158,7 @@ python scripts/init_db.py
 python scripts/recreate_db.py
 
 # Тестируем генератор ссылок
-python scripts/test_url_generator.py
+# python scripts/test_url_generator.py
 
 # Тестируем парсер ссылок
 python scripts/test_link_parser.py
