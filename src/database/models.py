@@ -33,7 +33,7 @@ class Film(Base):
 
     # Системные поля
     is_active = Column(Boolean, default=True)
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
+    first_seen_at = Column(DateTime, default=datetime.utcnow)  # ← Используем datetime по умолчанию
     last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
