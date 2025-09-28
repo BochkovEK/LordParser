@@ -162,14 +162,19 @@ def test_recent_parsing_history():
         print(f"📊 Последние {len(recent_history)} записей:")
 
         for i, record in enumerate(recent_history, 1):
-            film_title = record.film.title if record.film and record.film.title else "Unknown"
             status_icon = "✅" if record.success else "❌"
 
-            print(f"  {i}. {status_icon} {record.parsing_type}: {film_title}")
-            print(f"     🕒 {record.parsed_at}")
+            # Первая строка: тип парсинга + URL (для всех записей)
+            link_display = record.film.url if record.film else "URL не найден"
+            print(f"  {i}. {status_icon} {record.parsing_type}: {link_display}")
 
-            if record.error_message:
-                print(f"     💥 Ошибка: {record.error_message}")
+            # Вторая строка: статус детальной информации
+            film_details = record.film.title if record.film and record.film.title else "None"
+            print(f"     film_details: {film_details}")
+
+            # Третья строка: временная метка
+            print(f"     🕒 {record.parsed_at}")
+            print()  # Пустая строка для разделения
 
     except Exception as e:
         print(f"❌ Ошибка при чтении истории: {e}")
