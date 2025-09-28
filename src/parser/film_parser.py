@@ -239,40 +239,45 @@ class FilmParser:
         except:
             return None
 
-    def _extract_kp_rating(self) -> Optional[float]:
-        """Извлекает рейтинг КиноПоиск с multiple стратегиями"""
+    def _extract_kp_rating(self) -> dict:
+        """Извлекает рейтинг КиноПоиск с информацией о стратегии"""
+        result = {'rating': None, 'strategy': None, 'debug_info': ''}
+
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
 
             # Стратегия 1: Основные паттерны
             patterns = [
-                r'КП\s*[:\-]?\s*(\d+\.\d+)',  # КП 7.8, КП: 7.8
-                r'КиноПоиск\s*[:\-]?\s*(\d+\.\d+)',  # КиноПоиск: 7.8
-                r'kinopoisk\s*[:\-]?\s*(\d+\.\d+)',  # kinopoisk: 7.8 (англ)
-                r'kp\s*[:\-]?\s*(\d+\.\d+)',  # kp: 7.8
+                (r'КП\s*[:\-]?\s*(\d+\.\d+)', 'regex_kp_basic'),
+                (r'КиноПоиск\s*[:\-]?\s*(\d+\.\d+)', 'regex_kinopoisk_full'),
+                (r'kinopoisk\s*[:\-]?\s*(\d+\.\d+)', 'regex_kinopoisk_en'),
             ]
 
-            for pattern in patterns:
+            for pattern, strategy_name in patterns:
                 match = re.search(pattern, body_text, re.IGNORECASE)
                 if match:
                     rating = float(match.group(1))
-                    if 0 <= rating <= 10:  # Валидация диапазона
-                        return rating
+                    if 0 <= rating <= 10:
+                        result['rating'] = rating
+                        result['strategy'] = strategy_name
+                        result['debug_info'] = f"Найден по паттерну: {pattern}"
+                        return result
 
-            # Стратегия 2: Поиск в элементах с классами rating
+            # Стратегия 2: Поиск в элементах с классами
             rating_elements = self.driver.find_elements(By.CSS_SELECTOR,
                                                         "[class*='kp'], [class*='kinopoisk'], [class*='rating']")
 
             for element in rating_elements:
                 text = element.text.strip()
-                # Ищем числа 0-10 с точкой
                 rating_match = re.search(r'(\d+\.\d+)', text)
                 if rating_match:
                     rating = float(rating_match.group(1))
                     if 0 <= rating <= 10:
-                        # Проверяем контекст (есть ли упоминание КП)
-                        if any(keyword in text.lower() for keyword in ['кп', 'kinopoisk', 'kp']):
-                            return rating
+                        class_name = element.get_attribute('class')
+                        result['rating'] = rating
+                        result['strategy'] = 'element_class'
+                        result['debug_info'] = f"Найден в элементе с классом: {class_name}"
+                        return result
 
             # Стратегия 3: Поиск в data-атрибутах
             elements_with_data = self.driver.find_elements(By.CSS_SELECTOR,
@@ -285,36 +290,45 @@ class FilmParser:
                         try:
                             rating = float(value)
                             if 0 <= rating <= 10:
-                                return rating
+                                result['rating'] = rating
+                                result['strategy'] = 'data_attribute'
+                                result['debug_info'] = f"Найден в атрибуте: {attr}"
+                                return result
                         except:
                             continue
 
-            return None
+            result['debug_info'] = "Рейтинг не найден ни одной стратегией"
 
         except Exception as e:
-            logger.debug(f"Ошибка извлечения KP рейтинга: {e}")
-            return None
+            result['debug_info'] = f"Ошибка: {str(e)}"
 
-    def _extract_imdb_rating(self) -> Optional[float]:
-        """Извлекает рейтинг IMDB с multiple стратегиями"""
+        return result
+
+    def _extract_imdb_rating(self) -> dict:
+        """Извлекает рейтинг IMDB с информацией о стратегии"""
+        result = {'rating': None, 'strategy': None, 'debug_info': ''}
+
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
 
             # Стратегия 1: Основные паттерны
             patterns = [
-                r'IMDB\s*[:\-]?\s*(\d+\.\d+)',  # IMDB 7.5
-                r'IMDb\s*[:\-]?\s*(\d+\.\d+)',  # IMDb: 7.5
-                r'imdb\s*[:\-]?\s*(\d+\.\d+)',  # imdb: 7.5
+                (r'IMDB\s*[:\-]?\s*(\d+\.\d+)', 'regex_imdb_basic'),
+                (r'IMDb\s*[:\-]?\s*(\d+\.\d+)', 'regex_imdb_alt'),
+                (r'imdb\s*[:\-]?\s*(\d+\.\d+)', 'regex_imdb_en'),
             ]
 
-            for pattern in patterns:
+            for pattern, strategy_name in patterns:
                 match = re.search(pattern, body_text, re.IGNORECASE)
                 if match:
                     rating = float(match.group(1))
                     if 0 <= rating <= 10:
-                        return rating
+                        result['rating'] = rating
+                        result['strategy'] = strategy_name
+                        result['debug_info'] = f"Найден по паттерну: {pattern}"
+                        return result
 
-            # Стратегия 2: Поиск в элементах с классами imdb
+            # Стратегия 2: Поиск в элементах с классами
             rating_elements = self.driver.find_elements(By.CSS_SELECTOR,
                                                         "[class*='imdb'], [class*='rating']")
 
@@ -324,9 +338,11 @@ class FilmParser:
                 if rating_match:
                     rating = float(rating_match.group(1))
                     if 0 <= rating <= 10:
-                        # Проверяем контекст (есть ли упоминание IMDB)
-                        if any(keyword in text.lower() for keyword in ['imdb', 'imdb']):
-                            return rating
+                        class_name = element.get_attribute('class')
+                        result['rating'] = rating
+                        result['strategy'] = 'element_class'
+                        result['debug_info'] = f"Найден в элементе с классом: {class_name}"
+                        return result
 
             # Стратегия 3: Поиск в data-атрибутах
             elements_with_data = self.driver.find_elements(By.CSS_SELECTOR,
@@ -339,15 +355,19 @@ class FilmParser:
                         try:
                             rating = float(value)
                             if 0 <= rating <= 10:
-                                return rating
+                                result['rating'] = rating
+                                result['strategy'] = 'data_attribute'
+                                result['debug_info'] = f"Найден в атрибуте: {attr}"
+                                return result
                         except:
                             continue
 
-            return None
+            result['debug_info'] = "Рейтинг не найден ни одной стратегией"
 
         except Exception as e:
-            logger.debug(f"Ошибка извлечения IMDB рейтинга: {e}")
-            return None
+            result['debug_info'] = f"Ошибка: {str(e)}"
+
+        return result
 
     def update_film_in_db(self, film_data: Dict[str, Any], session_id: int) -> bool:
         """
