@@ -7,8 +7,8 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.connection import db_manager
-from database.models import create_tables
+from src.database.connection import db_manager
+from src.database.models import create_tables
 
 
 def main():
