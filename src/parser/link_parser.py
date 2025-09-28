@@ -8,6 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from urllib.parse import urljoin
 import time
+import re
 import logging
 from typing import List, Optional
 
@@ -75,36 +76,21 @@ class LinkParser:
 
             time.sleep(2)  # Даем время для загрузки динамического контента
 
-            # Ищем ссылки на фильмы
-            # Обычно это ссылки внутри элементов с фильмами
+            # Ищем ВСЕ ссылки на странице
+            all_links = self.driver.find_elements(By.TAG_NAME, "a")
             film_links = []
 
-            # Стратегия 1: Ищем ссылки в карточках фильмов
-            link_selectors = [
-                "a[href*='/filmy/']",  # ссылки содержащие '/filmy/'
-                ".movie-item a",
-                ".film-item a",
-                ".item a",
-                "h2 a",  # заголовки часто содержат ссылки
-            ]
-
-            for selector in link_selectors:
+            for link_element in all_links:
                 try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        href = element.get_attribute("href")
-                        if href and "/filmy/" in href and href not in film_links:
-                            # Преобразуем в абсолютный URL если нужно
-                            absolute_url = urljoin(self.base_url, href)
+                    href = link_element.get_attribute("href")
+                    if href and self._is_film_url(href):
+                        absolute_url = urljoin(self.base_url, href)
+                        if absolute_url not in film_links:
                             film_links.append(absolute_url)
-                except Exception as e:
-                    logger.debug(f"Селектор {selector} не сработал: {e}")
+                except:
                     continue
 
-            # Убираем дубликаты
-            film_links = list(set(film_links))
-
-            logger.info(f"✅ Найдено {len(film_links)} ссылок на странице {page_url}")
+            logger.info(f"✅ Найдено {len(film_links)} фильмов на странице {page_url}")
             return film_links
 
         except TimeoutException:
@@ -113,6 +99,44 @@ class LinkParser:
         except Exception as e:
             logger.error(f"❌ Ошибка парсинга страницы {page_url}: {e}")
             raise
+
+    def _is_film_url(self, url: str) -> bool:
+        """
+        Проверяет, является ли URL ссылкой на конкретный фильм
+
+        Правильные фильмы: https://wk.lordfilm17.ru/filmy/54057-istorija-delfina-spasenie-bimini-2025.html
+        Неправильные:
+          - https://wk.lordfilm17.ru/filmy/sssr/ (категория)
+          - https://wk.lordfilm17.ru/filmy/2025/ (год)
+          - https://wk.lordfilm17.ru/filmy/2025/page/2/ (пагинация)
+        """
+        if not url or '/filmy/' not in url:
+            return False
+
+        # Убираем базовый URL для анализа
+        path = url.replace(self.base_url, "").replace("https://wk.lordfilm17.ru", "")
+
+        # Разбиваем путь на части
+        parts = path.split('/')
+
+        # Должно быть: /filmy/XXXXX-nazvanie-filma-2025.html
+        if len(parts) < 3:
+            return False
+
+        # Проверяем структуру
+        film_part = parts[2]  # часть после /filmy/
+
+        # Должен быть ID в начале и год в конце
+        has_id = re.match(r'^\d+', film_part)  # начинается с цифр (ID)
+        has_year = re.search(r'\d{4}\.html$', film_part)  # заканчивается годом.html
+
+        # Исключаем категории и страницы
+        is_category = any(cat in film_part for cat in [
+            'sssr', 'russkie', 'amerikanskie', 'voennyj', 'komedii', 'dramy'
+        ])
+        is_pagination = 'page' in film_part
+
+        return bool(has_id and has_year and not is_category and not is_pagination)
 
     def save_links_to_db(self, links: List[str], session_id: int) -> int:
         """
