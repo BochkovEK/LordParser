@@ -9,7 +9,8 @@ sudo podman compose -f docker-compose.yml up -d
 #venv
 pip install virtualenv -i https://pypi.org/simple/
 export PATH="/usr/local/bin:$PATH"
-virtualenv --system-site-packages -p python ./venv
+!!! python3 -m venv --system-site-packages ./venv-lp
+#virtualenv --system-site-packages -p python ./venv
 source ./venv/bin/activate
 
 pip install -r requirements.txt -i https://pypi.org/simple/
@@ -127,6 +128,6 @@ sudo podman run -d \
   browserless/chrome:latest
 
 # ==========================================================
-# Активируем окружение и запускаем инициализацию БД
+# Активируем оvenvкружение и запускаем инициализацию БД
 python scripts/init_db.py
 
