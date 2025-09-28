@@ -218,20 +218,41 @@ def main():
 
                 if result['success']:
                     analysis = result['ratings_analysis']
-                    print(f"\n🎯 РЕЗУЛЬТАТЫ ДЛЯ: {result['metadata'].get('title', url)}")
+                    targets = result['target_values']
+
+                    print(f"\n🎯 РЕЗУЛЬТАТЫ ДЛЯ: {url}")
+                    print(f"🎯 Целевые значения: лайки={targets[0]}, рейтинг={targets[1]}, дизлайки={targets[2]}")
                     print(f"📊 Точность: {analysis['accuracy_score']:.2%}")
 
                     if analysis['found_values']:
                         found = analysis['found_values']
+                        target_likes, target_rating, target_dislikes = targets
+
                         print(
                             f"✅ Найдено: лайки={found['likes']}, рейтинг={found['rating']}, дизлайки={found['dislikes']}")
 
+                        # Сравнение с целевыми значениями
+                        print(f"📈 Сравнение:")
+                        print(
+                            f"   Лайки: найдено {found['likes']} vs целевое {target_likes} {'✅' if found['likes'] == target_likes else '❌'}")
+                        print(
+                            f"   Рейтинг: найдено {found['rating']} vs целевое {target_rating} {'✅' if abs(found['rating'] - target_rating) < 0.1 else '❌'}")
+                        print(
+                            f"   Дизлайки: найдено {found['dislikes']} vs целевое {target_dislikes} {'✅' if found['dislikes'] == target_dislikes else '❌'}")
+
                     print(f"\n🔍 СТРАТЕГИИ ПОИСКА:")
                     for strategy in analysis['strategies_tried']:
-                        status = "✅" if strategy['score'] > 0.5 else "⚠️" if strategy['score'] > 0 else "❌"
+                        status = "✅" if strategy['score'] > 0.8 else "⚠️" if strategy['score'] > 0.3 else "❌"
                         print(f"   {status} {strategy['name']}: {strategy['score']:.2%}")
                         if strategy['matches']:
-                            print(f"      Совпадения: {strategy['matches'][:3]}")  # Показываем первые 3
+                            print(f"      Совпадения: {strategy['matches'][:2]}")  # Показываем первые 2
+
+                    # Показываем дополнительную диагностику
+                    if 'debug_info' in analysis:
+                        debug = analysis['debug_info']
+                        print(f"\n🔧 ДИАГНОСТИКА:")
+                        print(f"   Все тройки чисел: {debug.get('all_triple_numbers', [])[:3]}")
+                        print(f"   Элементов с rating: {debug.get('all_rating_elements', 0)}")
 
                     if analysis['accuracy_score'] < 0.8:
                         print(f"\n🔧 РЕКОМЕНДАЦИЯ: Нужно улучшить стратегию поиска")
@@ -244,7 +265,6 @@ def main():
 
     finally:
         driver.quit()
-
 
 if __name__ == "__main__":
     main()
