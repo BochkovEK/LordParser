@@ -288,27 +288,27 @@ class FilmParser:
             return None
 
     def _extract_kp_rating(self) -> Optional[float]:
-        """Извлекает рейтинг КиноПоиск"""
+        """Извлекает рейтинг КиноПоиск из элементов страницы"""
         try:
-            # Основная стратегия: поиск по классу th-rate-kp
-            kp_elements = self.driver.find_elements(By.CSS_SELECTOR,
-                                                    ".th-rate-kp, [class*='kp'], [class*='kinopoisk']")
+            # Основной селектор из рабочего скрипта
+            kp_selectors = [
+                "div.frate.frate-kp span",
+                ".frate-kp span",
+                "[class*='frate-kp'] span"
+            ]
 
-            for element in kp_elements:
-                text = element.text.strip()
-                rating_match = re.search(r'(\d+\.\d+)', text)
-                if rating_match:
-                    rating = float(rating_match.group(1))
-                    if 0 <= rating <= 10:
-                        return rating
-
-            # Резервная стратегия: поиск в тексте
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            match = re.search(r'КП\s*[:\-]?\s*(\d+\.\d+)', body_text, re.IGNORECASE)
-            if match:
-                rating = float(match.group(1))
-                if 0 <= rating <= 10:
-                    return rating
+            for selector in kp_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        text = element.text.strip()
+                        if text:
+                            try:
+                                return float(text)
+                            except ValueError:
+                                continue
+                except:
+                    continue
 
             return None
 
@@ -317,27 +317,27 @@ class FilmParser:
             return None
 
     def _extract_imdb_rating(self) -> Optional[float]:
-        """Извлекает рейтинг IMDB"""
+        """Извлекает рейтинг IMDB из элементов страницы"""
         try:
-            # Основная стратегия: поиск по классу th-rate-imdb
-            imdb_elements = self.driver.find_elements(By.CSS_SELECTOR,
-                                                      ".th-rate-imdb, [class*='imdb']")
+            # Основной селектор из рабочего скрипта
+            imdb_selectors = [
+                "div.frate.frate-imdb span",
+                ".frate-imdb span",
+                "[class*='frate-imdb'] span"
+            ]
 
-            for element in imdb_elements:
-                text = element.text.strip()
-                rating_match = re.search(r'(\d+\.\d+)', text)
-                if rating_match:
-                    rating = float(rating_match.group(1))
-                    if 0 <= rating <= 10:
-                        return rating
-
-            # Резервная стратегия: поиск в тексте
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            match = re.search(r'IMDB\s*[:\-]?\s*(\d+\.\d+)', body_text, re.IGNORECASE)
-            if match:
-                rating = float(match.group(1))
-                if 0 <= rating <= 10:
-                    return rating
+            for selector in imdb_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        text = element.text.strip()
+                        if text:
+                            try:
+                                return float(text)
+                            except ValueError:
+                                continue
+                except:
+                    continue
 
             return None
 
