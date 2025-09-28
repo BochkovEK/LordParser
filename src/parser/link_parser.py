@@ -11,7 +11,7 @@ import time
 import logging
 from typing import List, Optional
 
-from url_generator import URLGenerator
+from src.parser.url_generator import URLGenerator
 from src.database.connection import db_manager
 from src.database.models import Film, ParsingSession, ParsingHistory
 from src.utils.retry import retry_on_failure
