@@ -6,14 +6,12 @@ from selenium.webdriver.chrome.options import Options
 import json
 import time
 import re
-# import os
 
 SELENIUM_URL = "http://localhost:4444/wd/hub"
 
+
 def setup_driver():
     """Настройка Selenium WebDriver для контейнера"""
-
-
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -28,11 +26,13 @@ def setup_driver():
     return driver
 
 
-def extract_movie_data(driver, url):
+def extract_movie_data_with_targets(driver, url, target_values):
     """
-    Извлекает полную информацию о фильме: рейтинг + метаданные + дополнительные рейтинги
+    Извлекает информацию о фильме с целевым поиском рейтинга
+    target_values: [лайки, рейтинг, дизлайки]
     """
-    print(f"Анализирую URL: {url}")
+    print(f"🎯 Анализируем URL: {url}")
+    print(f"🎯 Целевые значения: лайки={target_values[0]}, рейтинг={target_values[1]}, дизлайки={target_values[2]}")
 
     try:
         driver.get(url)
@@ -41,21 +41,14 @@ def extract_movie_data(driver, url):
         )
         time.sleep(3)
 
-        # Извлекаем рейтинг LordFilm
-        ratings = extract_clean_ratings(driver)
-
-        # Извлекаем метаданные
-        metadata = extract_metadata(driver)
-
-        # Извлекаем дополнительные рейтинги (КП и IMDB)
-        additional_ratings = extract_additional_ratings(driver)
+        # Извлекаем рейтинг LordFilm с анализом стратегий
+        ratings_analysis = extract_ratings_with_analysis(driver, target_values)
 
         return {
             "url": url,
             "success": True,
-            "ratings": ratings,
-            "metadata": metadata,
-            "additional_ratings": additional_ratings
+            "target_values": target_values,
+            "ratings_analysis": ratings_analysis
         }
 
     except Exception as e:
@@ -66,285 +59,192 @@ def extract_movie_data(driver, url):
         }
 
 
-def extract_additional_ratings(driver):
-    """Извлекает рейтинги КиноПоиск (КП) и IMDB"""
-    additional_ratings = {}
+def extract_ratings_with_analysis(driver, target_values):
+    """
+    Анализирует стратегии поиска рейтинга с целевыми значениями
+    """
+    target_likes, target_rating, target_dislikes = target_values
+    analysis = {
+        'strategies_tried': [],
+        'best_match': None,
+        'accuracy_score': 0,
+        'found_values': None
+    }
 
     try:
-        # Получаем весь текст страницы
         body_text = driver.find_element(By.TAG_NAME, "body").text
 
-        # Паттерны для поиска рейтингов
-        patterns = [
-            # Формат: КП 7.8, IMDB 7.5
-            (r'КП\s*(\d+\.\d+)', 'kinopoisk'),
-            (r'IMDB\s*(\d+\.\d+)', 'imdb'),
-            # Формат: КиноПоиск: 7.8, IMDb: 7.5
-            (r'КиноПоиск[:\s]*(\d+\.\d+)', 'kinopoisk'),
-            (r'IMDb[:\s]*(\d+\.\d+)', 'imdb'),
-            # Формат с русскими буквами: КП, ИМДБ
-            (r'КП[:\s]*(\d+\.\d+)', 'kinopoisk'),
-            (r'ИМДБ[:\s]*(\d+\.\d+)', 'imdb'),
-        ]
+        # Стратегия 1: Точный паттерн "число число.число число"
+        strategy1_matches = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+        analysis['strategies_tried'].append({
+            'name': 'Тройной паттерн с точкой',
+            'matches': strategy1_matches,
+            'score': calculate_accuracy(strategy1_matches, target_values)
+        })
 
-        for pattern, rating_type in patterns:
-            match = re.search(pattern, body_text, re.IGNORECASE)
-            if match:
-                additional_ratings[rating_type] = float(match.group(1))
+        # Стратегия 2: Паттерн "число число число" (для целых рейтингов)
+        strategy2_matches = re.findall(r'(\d+)\s+(\d+)\s+(\d+)', body_text)
+        analysis['strategies_tried'].append({
+            'name': 'Тройной паттерн целые числа',
+            'matches': strategy2_matches,
+            'score': calculate_accuracy(strategy2_matches, target_values, is_integer=True)
+        })
 
-        # Альтернативный поиск по элементам страницы
-        if not additional_ratings:
-            additional_ratings = find_ratings_in_elements(driver)
+        # Стратегия 3: Поиск отдельных чисел рядом
+        strategy3_matches = find_adjacent_numbers(driver, target_values)
+        analysis['strategies_tried'].append({
+            'name': 'Соседние числа в элементах',
+            'matches': strategy3_matches,
+            'score': calculate_accuracy(strategy3_matches, target_values)
+        })
+
+        # Стратегия 4: Поиск в конкретных элементах с классами rating
+        strategy4_matches = find_rating_elements(driver, target_values)
+        analysis['strategies_tried'].append({
+            'name': 'Элементы с классами рейтинга',
+            'matches': strategy4_matches,
+            'score': calculate_accuracy(strategy4_matches, target_values)
+        })
+
+        # Находим лучшую стратегию
+        best_strategy = max(analysis['strategies_tried'], key=lambda x: x['score'])
+        analysis['best_match'] = best_strategy
+        analysis['accuracy_score'] = best_strategy['score']
+
+        if best_strategy['matches']:
+            # Берем первое наилучшее совпадение
+            best_match = best_strategy['matches'][0]
+            analysis['found_values'] = {
+                'likes': int(best_match[0]),
+                'rating': float(best_match[1]),
+                'dislikes': int(best_match[2])
+            }
+
+        # Дополнительная диагностика
+        analysis['debug_info'] = {
+            'all_triple_numbers': re.findall(r'(\d+)\s+(\S+)\s+(\d+)', body_text),
+            'all_rating_elements': len(driver.find_elements(By.CSS_SELECTOR, "[class*='rating']"))
+        }
 
     except Exception as e:
-        print(f"Ошибка поиска дополнительных рейтингов: {e}")
+        analysis['error'] = str(e)
 
-    return additional_ratings
-
-
-def find_ratings_in_elements(driver):
-    """Ищет рейтинги в элементах страницы (более надежный метод)"""
-    ratings = {}
-
-    try:
-        # Ищем элементы, содержащие слова КП, IMDB и числа
-        elements = driver.find_elements(By.XPATH,
-                                        "//*[text()[contains(., 'КП') or contains(., 'IMDB') or contains(., 'КиноПоиск') or contains(., 'IMDb')]]")
-
-        for element in elements:
-            text = element.text
-
-            # Ищем КП рейтинг
-            kp_match = re.search(r'КП[:\s]*(\d+\.\d+)', text, re.IGNORECASE)
-            if kp_match and 'kinopoisk' not in ratings:
-                ratings['kinopoisk'] = float(kp_match.group(1))
-
-            # Ищем IMDB рейтинг
-            imdb_match = re.search(r'IMDB[:\s]*(\d+\.\d+)', text, re.IGNORECASE)
-            if imdb_match and 'imdb' not in ratings:
-                ratings['imdb'] = float(imdb_match.group(1))
-
-    except Exception as e:
-        print(f"Ошибка поиска в элементах: {e}")
-
-    return ratings
+    return analysis
 
 
-def extract_metadata(driver):
-    """Извлекает метаданные фильма со страницы"""
-    metadata = {}
+def calculate_accuracy(matches, target_values, is_integer=False):
+    """Вычисляет точность совпадения с целевыми значениями"""
+    if not matches:
+        return 0
 
-    try:
-        # Получаем весь текст страницы для анализа
-        body_text = driver.find_element(By.TAG_NAME, "body").text
+    target_likes, target_rating, target_dislikes = target_values
+    best_score = 0
 
-        # Русское название (ищем в заголовке h1/h2 или в начале текста)
+    for match in matches:
         try:
-            # Пробуем найти заголовок с названием фильма
-            title_elements = driver.find_elements(By.XPATH, "//h1 | //h2")
-            for title_element in title_elements:
-                title_text = title_element.text.strip()
-                if title_text and 'смотреть онлайн' in title_text.lower():
-                    metadata['title'] = title_text.split('смотреть онлайн')[0].strip()
-                    break
+            found_likes = int(match[0])
+            found_rating = float(match[1]) if not is_integer else float(match[1])
+            found_dislikes = int(match[2])
 
-            # Если не нашли, ищем в начале body текста
-            if 'title' not in metadata:
-                first_lines = body_text.split('\n')[:10]  # Первые 10 строк
-                for line in first_lines:
-                    line = line.strip()
-                    if line and 'смотреть онлайн' in line.lower():
-                        metadata['title'] = line.split('смотреть онлайн')[0].strip()
-                        break
-        except:
-            pass
+            # Вычисляем точность для каждого значения
+            likes_score = 1 if found_likes == target_likes else 0.5 if abs(found_likes - target_likes) <= 10 else 0
+            rating_score = 1 if abs(found_rating - target_rating) < 0.1 else 0.5 if abs(
+                found_rating - target_rating) < 1 else 0
+            dislikes_score = 1 if found_dislikes == target_dislikes else 0.5 if abs(
+                found_dislikes - target_dislikes) <= 10 else 0
 
-        # Год выхода
-        year_match = re.search(r'Год выхода:\s*(\d{4})', body_text)
-        if year_match:
-            metadata['year'] = year_match.group(1)
+            total_score = (likes_score + rating_score + dislikes_score) / 3
+            best_score = max(best_score, total_score)
 
-        # Страна
-        country_match = re.search(r'Страна:\s*([^\n]+)', body_text)
-        if country_match:
-            metadata['country'] = country_match.group(1).strip()
+        except (ValueError, IndexError):
+            continue
 
-        # Оригинальное название
-        original_title_match = re.search(r'Оригинальное название:\s*([^\n]+)', body_text)
-        if original_title_match:
-            metadata['original_title'] = original_title_match.group(1).strip()
-
-        # Категории
-        categories_match = re.search(r'Категории?:\s*([^\n]+)', body_text, re.IGNORECASE)
-        if categories_match:
-            categories_text = categories_match.group(1).strip()
-            # Разделяем категории по слешам
-            metadata['categories'] = [cat.strip() for cat in categories_text.split('/')]
-
-        # Режиссер
-        director_match = re.search(r'Режиссер:\s*([^\n]+)', body_text)
-        if director_match:
-            metadata['director'] = director_match.group(1).strip()
-
-        # Актеры (многострочный поиск)
-        actors_section = extract_actors_section(body_text)
-        if actors_section:
-            metadata['actors'] = actors_section
-
-    except Exception as e:
-        metadata['error'] = f"Ошибка извлечения метаданных: {str(e)}"
-
-    return metadata
+    return best_score
 
 
-def extract_actors_section(body_text):
-    """Извлекает список актеров (сложный многострочный поиск)"""
+def find_adjacent_numbers(driver, target_values):
+    """Ищет три числа расположенных рядом в DOM"""
+    matches = []
     try:
-        # Ищем блок после "Актеры:" до следующего заголовка
-        lines = body_text.split('\n')
-        actors_started = False
-        actors_lines = []
+        # Ищем элементы содержащие числа
+        elements_with_numbers = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
 
-        for line in lines:
-            line = line.strip()
-
-            if 'Актеры:' in line:
-                actors_started = True
-                # Убираем "Актеры:" из начала строки
-                actor_line = line.replace('Актеры:', '').strip()
-                if actor_line:
-                    actors_lines.append(actor_line)
-                continue
-
-            if actors_started:
-                # Останавливаемся на следующем заголовке или пустой строке
-                if not line or line in ['Поиск по параметрам', 'Выберите жанр', 'Выберите страну']:
-                    break
-                actors_lines.append(line)
-
-        if actors_lines:
-            # Объединяем все строки и разбиваем по запятым/точкам
-            all_actors_text = ' '.join(actors_lines)
-            # Разделяем актеров (предполагаем разделение запятыми)
-            actors = [actor.strip() for actor in re.split(r'[,\n]', all_actors_text) if actor.strip()]
-            return actors[:20]  # Ограничиваем список
+        for element in elements_with_numbers:
+            text = element.text.strip()
+            # Ищем три числа подряд
+            numbers = re.findall(r'\d+', text)
+            if len(numbers) >= 3:
+                # Проверяем разные комбинации трех чисел
+                for i in range(len(numbers) - 2):
+                    triple = numbers[i:i + 3]
+                    matches.append(triple)
 
     except Exception as e:
-        print(f"Ошибка извлечения актеров: {e}")
+        print(f"Ошибка поиска соседних чисел: {e}")
 
-    return None
+    return matches
 
 
-def extract_clean_ratings(driver):
-    """Извлекает чистые значения рейтинга (исправленная версия)"""
+def find_rating_elements(driver, target_values):
+    """Ищет рейтинги в элементах с определенными классами"""
+    matches = []
     try:
-        body_text = driver.find_element(By.TAG_NAME, "body").text
+        rating_elements = driver.find_elements(By.CSS_SELECTOR,
+                                               "[class*='rating'], [class*='like'], [class*='dislike'], [class*='vote']")
 
-        # Улучшенный паттерн: ищем числа с точкой И целые числа для рейтинга
-        # Вариант 1: число число.число число (обычный случай)
-        rating_pattern1 = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-        if rating_pattern1:
-            likes, rating, dislikes = rating_pattern1[0]
-            return {
-                "likes": int(likes),
-                "rating": float(rating),
-                "dislikes": int(dislikes)
-            }
-
-        # Вариант 2: число 0 число (если рейтинг 0)
-        rating_pattern2 = re.findall(r'(\d+)\s+0\s+(\d+)', body_text)
-        if rating_pattern2:
-            likes, dislikes = rating_pattern2[0]
-            return {
-                "likes": int(likes),
-                "rating": 0.0,
-                "dislikes": int(dislikes)
-            }
-
-        # Вариант 3: число 0.0 число (если рейтинг 0.0)
-        rating_pattern3 = re.findall(r'(\d+)\s+0\.0\s+(\d+)', body_text)
-        if rating_pattern3:
-            likes, dislikes = rating_pattern3[0]
-            return {
-                "likes": int(likes),
-                "rating": 0.0,
-                "dislikes": int(dislikes)
-            }
-
-        # Дополнительная диагностика для дебага
-        print(f"🔍 DEBUG: Ищем рейтинг в тексте...")
-        # Ищем любые три числа подряд
-        all_triples = re.findall(r'(\d+)\s+(\d+)\s+(\d+)', body_text)
-        if all_triples:
-            print(f"🔍 DEBUG: Найдены тройки чисел: {all_triples}")
-
-        # Ищем числа с точками
-        all_decimals = re.findall(r'\d+\.\d+', body_text)
-        if all_decimals:
-            print(f"🔍 DEBUG: Найдены числа с точками: {all_decimals}")
-
-        return {"error": "Рейтинг не найден"}
+        for element in rating_elements:
+            text = element.text.strip()
+            numbers = re.findall(r'\d+', text)
+            if len(numbers) >= 3:
+                matches.append(numbers[:3])
 
     except Exception as e:
-        return {"error": str(e)}
+        print(f"Ошибка поиска в элементах рейтинга: {e}")
+
+    return matches
 
 
 # Основная функция
 def main():
-
-    # Или загрузка конфига из файла
     with open('config.json', 'r') as f:
         config = json.load(f)
 
     driver = setup_driver()
-    all_results = {}
 
     try:
-        for url_key, target_values in config.items():
-            # Если ключ начинается с 'https', считаем его URL
-            if url_key.startswith('https'):
-                result = extract_movie_data(driver, url_key)
-                all_results[url_key] = result
+        for url, target_values in config.items():
+            if url.startswith('https'):
+                result = extract_movie_data_with_targets(driver, url, target_values)
 
                 if result['success']:
-                    ratings = result['ratings']
-                    metadata = result['metadata']
+                    analysis = result['ratings_analysis']
+                    print(f"\n🎯 РЕЗУЛЬТАТЫ ДЛЯ: {result['metadata'].get('title', url)}")
+                    print(f"📊 Точность: {analysis['accuracy_score']:.2%}")
 
-                    print(f"🎬 {metadata.get('title', 'Название не найдено')}")
-                    print(f"📅 Год: {metadata.get('year', 'Не указан')}")
-                    print(f"🌍 Страна: {metadata.get('country', 'Не указана')}")
-                    print(f"🔤 Оригинал: {metadata.get('original_title', 'Не указано')}")
-                    print(f"🎭 Режиссер: {metadata.get('director', 'Не указан')}")
-                    print(f"📊 Категории: {', '.join(metadata.get('categories', []))}")
+                    if analysis['found_values']:
+                        found = analysis['found_values']
+                        print(
+                            f"✅ Найдено: лайки={found['likes']}, рейтинг={found['rating']}, дизлайки={found['dislikes']}")
 
-                    if 'error' not in ratings:
-                        print(f"⭐ Рейтинг: {ratings['rating']} (👍 {ratings['likes']} 👎 {ratings['dislikes']})")
-                    else:
-                        print(f"⭐ Рейтинг: {ratings['error']}")
+                    print(f"\n🔍 СТРАТЕГИИ ПОИСКА:")
+                    for strategy in analysis['strategies_tried']:
+                        status = "✅" if strategy['score'] > 0.5 else "⚠️" if strategy['score'] > 0 else "❌"
+                        print(f"   {status} {strategy['name']}: {strategy['score']:.2%}")
+                        if strategy['matches']:
+                            print(f"      Совпадения: {strategy['matches'][:3]}")  # Показываем первые 3
 
-                    if metadata.get('actors'):
-                        print(f"🎭 Актеры: {', '.join(metadata['actors'][:5])}...")
+                    if analysis['accuracy_score'] < 0.8:
+                        print(f"\n🔧 РЕКОМЕНДАЦИЯ: Нужно улучшить стратегию поиска")
 
                 else:
                     print(f"❌ Ошибка: {result['error']}")
 
-
-            print("=" * 60)
-            time.sleep(2)
-
-            # Сохранение результатов
-            output = {
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "results": all_results
-            }
-
-            with open('movie_data.json', 'w', encoding='utf-8') as f:
-                json.dump(output, f, ensure_ascii=False, indent=2)
-
-            print("🎉 Парсинг завершен! Результаты в movie_data.json")
+                print("=" * 80)
+                time.sleep(2)
 
     finally:
         driver.quit()
+
 
 if __name__ == "__main__":
     main()
