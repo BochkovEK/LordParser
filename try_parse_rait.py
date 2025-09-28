@@ -6,15 +6,13 @@ from selenium.webdriver.chrome.options import Options
 import json
 import time
 import re
-import os
-from pathlib import Path
 
 SELENIUM_URL = "http://localhost:4444/wd/hub"
-CACHE_DIR = "html_cache"
 
 
 def setup_driver():
     """Настройка Selenium WebDriver для контейнера"""
+
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -29,160 +27,95 @@ def setup_driver():
     return driver
 
 
-def get_page_content(driver, url):
-    """Получает содержимое страницы с кэшированием"""
-    # Создаем директорию для кэша
-    Path(CACHE_DIR).mkdir(exist_ok=True)
+def extract_movie_data(driver, url):
+    """
+    Извлекает полную информацию о фильме: рейтинг + метаданные + дополнительные рейтинги
+    """
+    print(f"Анализирую URL: {url}")
 
-    # Генерируем имя файла из URL
-    filename = re.sub(r'[^a-zA-Z0-9]', '_', url) + ".html"
-    cache_path = os.path.join(CACHE_DIR, filename)
-
-    # Пробуем загрузить из кэша
-    if os.path.exists(cache_path):
-        print(f"📁 Загружаем из кэша: {cache_path}")
-        with open(cache_path, 'r', encoding='utf-8') as f:
-            return f.read()
-
-    # Если нет в кэше, загружаем через Selenium
-    print(f"🌐 Загружаем через Selenium: {url}")
-    driver.get(url)
-    WebDriverWait(driver, 10).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
-    )
-    time.sleep(3)
-
-    content = driver.page_source
-
-    # Сохраняем в кэш
-    with open(cache_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    print(f"💾 Сохранено в кэш: {cache_path}")
-
-    return content
-
-
-def extract_clean_ratings(driver):
-    """Извлекает чистые значения рейтинга со страницы"""
     try:
-        # Способ 1: Поиск в тексте (оригинальный способ)
-        body_text = driver.find_element(By.TAG_NAME, "body").text
-        rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+        driver.get(url)
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        time.sleep(3)
 
-        if rating_pattern:
-            likes, rating, dislikes = rating_pattern[0]
-            return {
-                "likes": int(likes),
-                "rating": float(rating),
-                "dislikes": int(dislikes),
-                "source": "text_pattern"
-            }
+        # Извлекаем рейтинг LordFilm (старым методом)
+        ratings_old = extract_clean_ratings(driver)
 
-        # Способ 2: Поиск в HTML элементах через Selenium
-        likes_from_elements = extract_likes_from_elements(driver)
-        dislikes_from_elements = extract_dislikes_from_elements(driver)
-        rating_from_elements = extract_rating_from_elements(driver)
+        # Извлекаем рейтинг новым методом (из HTML-элементов)
+        ratings_new = extract_ratings_from_elements(driver)
 
-        if likes_from_elements is not None and dislikes_from_elements is not None:
-            return {
-                "likes": likes_from_elements,
-                "rating": rating_from_elements or 0.0,
-                "dislikes": dislikes_from_elements,
-                "source": "html_elements"
-            }
+        # Извлекаем метаданные
+        metadata = extract_metadata(driver)
 
-        return {"error": "Рейтинг не найден"}
+        # Извлекаем дополнительные рейтинги (КП и IMDB)
+        additional_ratings = extract_additional_ratings(driver)
+
+        return {
+            "url": url,
+            "success": True,
+            "ratings": {
+                "old_method": ratings_old,
+                "new_method": ratings_new
+            },
+            "metadata": metadata,
+            "additional_ratings": additional_ratings
+        }
 
     except Exception as e:
-        return {"error": str(e)}
+        return {
+            "url": url,
+            "success": False,
+            "error": str(e)
+        }
 
 
-def extract_likes_from_elements(driver):
-    """Извлекает количество лайков из элементов страницы"""
+def extract_ratings_from_elements(driver):
+    """
+    Извлекает лайки и дизлайки из HTML-элементов (новый метод)
+    """
+    ratings = {}
+
     try:
-        # Ищем элемент с классом rate-plus и внутри span с классом psc
-        like_selectors = [
-            "div.rate-plus span.psc",
-            ".rate-plus .psc",
-            "[class*='rate-plus'] [class*='psc']",
-            "#ps-\\d+ .psc"  # по ID типа ps-53544
-        ]
-
-        for selector in like_selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    text = element.text.strip()
-                    if text and text.isdigit():
-                        print(f"✅ Найден лайк: {text}")
-                        return int(text)
-            except:
-                continue
-
-        return None
+        # Ищем элемент лайков по классу rate-plus и классу psc
+        likes_elements = driver.find_elements(By.CSS_SELECTOR, "div.rate-plus span.psc")
+        if likes_elements:
+            likes_text = likes_elements[0].text.strip()
+            if likes_text.isdigit():
+                ratings['likes'] = int(likes_text)
+            else:
+                ratings['likes_error'] = f"Некорректное значение лайков: {likes_text}"
+        else:
+            ratings['likes_error'] = "Элемент лайков не найден"
 
     except Exception as e:
-        print(f"Ошибка извлечения лайков: {e}")
-        return None
+        ratings['likes_error'] = f"Ошибка извлечения лайков: {str(e)}"
 
-
-def extract_dislikes_from_elements(driver):
-    """Извлекает количество дизлайков из элементов страницы"""
     try:
-        # Ищем элемент с классом rate-minus и внутри span с классом msc
-        dislike_selectors = [
-            "div.rate-minus span.msc",
-            ".rate-minus .msc",
-            "[class*='rate-minus'] [class*='msc']",
-            "#ms-\\d+ .msc"  # по ID типа ms-53544
-        ]
-
-        for selector in dislike_selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    text = element.text.strip()
-                    if text and text.isdigit():
-                        print(f"✅ Найден дизлайк: {text}")
-                        return int(text)
-            except:
-                continue
-
-        return None
+        # Ищем элемент дизлайков по классу rate-minus и классу msc
+        dislikes_elements = driver.find_elements(By.CSS_SELECTOR, "div.rate-minus span.msc")
+        if dislikes_elements:
+            dislikes_text = dislikes_elements[0].text.strip()
+            if dislikes_text.isdigit():
+                ratings['dislikes'] = int(dislikes_text)
+            else:
+                ratings['dislikes_error'] = f"Некорректное значение дизлайков: {dislikes_text}"
+        else:
+            ratings['dislikes_error'] = "Элемент дизлайков не найден"
 
     except Exception as e:
-        print(f"Ошибка извлечения дизлайков: {e}")
-        return None
+        ratings['dislikes_error'] = f"Ошибка извлечения дизлайков: {str(e)}"
 
+    # Вычисляем рейтинг на основе лайков и дизлайков, если оба значения доступны
+    if 'likes' in ratings and 'dislikes' in ratings:
+        total = ratings['likes'] + ratings['dislikes']
+        if total > 0:
+            ratings['rating'] = round((ratings['likes'] / total) * 10, 1)
+        else:
+            ratings['rating_error'] = "Невозможно вычислить рейтинг (лайки + дизлайки = 0)"
 
-def extract_rating_from_elements(driver):
-    """Извлекает рейтинг из элементов страницы"""
-    try:
-        # Ищем рейтинг в различных элементах
-        rating_selectors = [
-            "[class*='rating']",
-            "[class*='rate-value']",
-            "[class*='score']"
-        ]
-
-        for selector in rating_selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    text = element.text.strip()
-                    # Ищем число с точкой
-                    match = re.search(r'(\d+\.\d+)', text)
-                    if match:
-                        print(f"✅ Найден рейтинг: {match.group(1)}")
-                        return float(match.group(1))
-            except:
-                continue
-
-        return None
-
-    except Exception as e:
-        print(f"Ошибка извлечения рейтинга: {e}")
-        return None
+    return ratings
 
 
 def extract_additional_ratings(driver):
@@ -354,51 +287,29 @@ def extract_actors_section(body_text):
     return None
 
 
-def extract_movie_data(driver, url):
-    """
-    Извлекает полную информацию о фильме: рейтинг + метаданные + дополнительные рейтинги
-    """
-    print(f"Анализирую URL: {url}")
-
+def extract_clean_ratings(driver):
+    """Извлекает чистые значения рейтинга (старый метод)"""
     try:
-        # Используем кэширование для ускорения
-        page_content = get_page_content(driver, url)
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+        rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
 
-        # Перезагружаем страницу для работы с Selenium элементами
-        driver.get(url)
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(3)
+        if rating_pattern:
+            likes, rating, dislikes = rating_pattern[0]
+            return {
+                "likes": int(likes),
+                "rating": float(rating),
+                "dislikes": int(dislikes)
+            }
 
-        # Извлекаем рейтинг LordFilm (из текста и элементов)
-        ratings = extract_clean_ratings(driver)
-
-        # Извлекаем метаданные
-        metadata = extract_metadata(driver)
-
-        # Извлекаем дополнительные рейтинги (КП и IMDB)
-        additional_ratings = extract_additional_ratings(driver)
-
-        return {
-            "url": url,
-            "success": True,
-            "ratings": ratings,
-            "metadata": metadata,
-            "additional_ratings": additional_ratings
-        }
+        return {"error": "Рейтинг не найден"}
 
     except Exception as e:
-        return {
-            "url": url,
-            "success": False,
-            "error": str(e)
-        }
+        return {"error": str(e)}
 
 
 # Основная функция
 def main():
-    # Загрузка конфига из файла
+    # Или загрузка конфига из файла
     with open('config.json', 'r') as f:
         config = json.load(f)
 
@@ -413,9 +324,9 @@ def main():
                 all_results[url_key] = result
 
                 if result['success']:
-                    ratings = result['ratings']
+                    ratings_old = result['ratings']['old_method']
+                    ratings_new = result['ratings']['new_method']
                     metadata = result['metadata']
-                    additional = result['additional_ratings']
 
                     print(f"🎬 {metadata.get('title', 'Название не найдено')}")
                     print(f"📅 Год: {metadata.get('year', 'Не указан')}")
@@ -424,24 +335,29 @@ def main():
                     print(f"🎭 Режиссер: {metadata.get('director', 'Не указан')}")
                     print(f"📊 Категории: {', '.join(metadata.get('categories', []))}")
 
-                    if 'error' not in ratings:
-                        source_info = f" ({ratings.get('source', 'unknown')})"
+                    # Вывод рейтингов старым методом
+                    print("\n📊 РЕЙТИНГИ (старый метод):")
+                    if 'error' not in ratings_old:
                         print(
-                            f"⭐ Рейтинг: {ratings['rating']} (👍 {ratings['likes']} 👎 {ratings['dislikes']}){source_info}")
+                            f"⭐ Рейтинг: {ratings_old['rating']} (👍 {ratings_old['likes']} 👎 {ratings_old['dislikes']})")
                     else:
-                        print(f"⭐ Рейтинг: {ratings['error']}")
+                        print(f"❌ Ошибка: {ratings_old['error']}")
 
-                    # Дополнительные рейтинги
-                    if additional:
-                        kp = additional.get('kinopoisk')
-                        imdb = additional.get('imdb')
-                        if kp or imdb:
-                            print(f"🎯 Доп. рейтинги: ", end="")
-                            if kp:
-                                print(f"КП: {kp} ", end="")
-                            if imdb:
-                                print(f"IMDB: {imdb}", end="")
-                            print()
+                    # Вывод рейтингов новым методом
+                    print("\n📊 РЕЙТИНГИ (новый метод из HTML):")
+                    if 'rating' in ratings_new:
+                        print(
+                            f"⭐ Рейтинг: {ratings_new['rating']} (👍 {ratings_new['likes']} 👎 {ratings_new['dislikes']})")
+                    else:
+                        if 'likes' in ratings_new:
+                            print(f"👍 Лайки: {ratings_new['likes']}")
+                        else:
+                            print(f"❌ Лайки: {ratings_new.get('likes_error', 'Не найдены')}")
+
+                        if 'dislikes' in ratings_new:
+                            print(f"👎 Дизлайки: {ratings_new['dislikes']}")
+                        else:
+                            print(f"❌ Дизлайки: {ratings_new.get('dislikes_error', 'Не найдены')}")
 
                     if metadata.get('actors'):
                         print(f"🎭 Актеры: {', '.join(metadata['actors'][:5])}...")
@@ -450,7 +366,7 @@ def main():
                     print(f"❌ Ошибка: {result['error']}")
 
                 print("=" * 60)
-                time.sleep(1)  # Уменьшили паузу для кэшированных запросов
+                time.sleep(2)
 
         # Сохранение результатов
         output = {
