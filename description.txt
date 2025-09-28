@@ -27,6 +27,26 @@ sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP DATA
 # 2. Удалить все таблицы
 sudo podman exec -it movie_postgres psql -U movie_user -d movie_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 
+# Полная очистка (рекомендуется для db_init)
+
+sudo podman exec -it movie_postgres bash
+psql -U <username> -d postgres
+-- Отключаем связи
+REVOKE CONNECT ON DATABASE <database> FROM public;
+
+-- Завершаем все активные подключения
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = '<database>' AND pid <> pg_backend_pid();
+
+-- Пересоздаем базу данных
+DROP DATABASE <database>;
+CREATE DATABASE <database>;
+
+-- Восстанавливаем права
+GRANT ALL PRIVILEGES ON DATABASE <database> TO <username>;
+
+
 # Запуск scheduler DB
 # --------------------
 # Скопировать конфиг сервиса
@@ -76,6 +96,9 @@ sudo systemctl status lordfilm-bot
 
 # Включить автозагрузку при старте системы
 sudo systemctl enable lordfilm-bot
+
+# Поиск запущенных процессов
+systemctl|grep -E "movie|bot|telegram"
 
 # Посмотреть логи в реальном времени
 sudo journalctl -u lordfilm-bot -f
