@@ -236,18 +236,52 @@ def extract_actors_section(body_text):
 
 
 def extract_clean_ratings(driver):
-    """Извлекает чистые значения рейтинга"""
+    """Извлекает чистые значения рейтинга (исправленная версия)"""
     try:
         body_text = driver.find_element(By.TAG_NAME, "body").text
-        rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
 
-        if rating_pattern:
-            likes, rating, dislikes = rating_pattern[0]
+        # Улучшенный паттерн: ищем числа с точкой И целые числа для рейтинга
+        # Вариант 1: число число.число число (обычный случай)
+        rating_pattern1 = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+        if rating_pattern1:
+            likes, rating, dislikes = rating_pattern1[0]
             return {
                 "likes": int(likes),
                 "rating": float(rating),
                 "dislikes": int(dislikes)
             }
+
+        # Вариант 2: число 0 число (если рейтинг 0)
+        rating_pattern2 = re.findall(r'(\d+)\s+0\s+(\d+)', body_text)
+        if rating_pattern2:
+            likes, dislikes = rating_pattern2[0]
+            return {
+                "likes": int(likes),
+                "rating": 0.0,
+                "dislikes": int(dislikes)
+            }
+
+        # Вариант 3: число 0.0 число (если рейтинг 0.0)
+        rating_pattern3 = re.findall(r'(\d+)\s+0\.0\s+(\d+)', body_text)
+        if rating_pattern3:
+            likes, dislikes = rating_pattern3[0]
+            return {
+                "likes": int(likes),
+                "rating": 0.0,
+                "dislikes": int(dislikes)
+            }
+
+        # Дополнительная диагностика для дебага
+        print(f"🔍 DEBUG: Ищем рейтинг в тексте...")
+        # Ищем любые три числа подряд
+        all_triples = re.findall(r'(\d+)\s+(\d+)\s+(\d+)', body_text)
+        if all_triples:
+            print(f"🔍 DEBUG: Найдены тройки чисел: {all_triples}")
+
+        # Ищем числа с точками
+        all_decimals = re.findall(r'\d+\.\d+', body_text)
+        if all_decimals:
+            print(f"🔍 DEBUG: Найдены числа с точками: {all_decimals}")
 
         return {"error": "Рейтинг не найден"}
 
