@@ -199,30 +199,34 @@ class FilmParser:
         except:
             return None
 
-    def _extract_lf_rating(self) -> Optional[float]:
-        """Извлекает рейтинг LordFilm"""
-        try:
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-
-            if rating_pattern:
-                likes, rating, dislikes = rating_pattern[0]
-                return float(rating)
-            return None
-
-        except Exception as e:
-            logger.debug(f"Ошибка извлечения LF рейтинга: {e}")
-            return None
-
     def _extract_lf_likes(self) -> Optional[int]:
-        """Извлекает лайки LordFilm"""
+        """Извлекает лайки LordFilm из элементов страницы"""
         try:
+            # Сначала пробуем найти в элементах
+            like_selectors = [
+                "div.rate-plus span.psc",
+                ".rate-plus .psc",
+                "[class*='rate-plus'] [class*='psc']",
+                "#ps-\\d+ .psc"
+            ]
+
+            for selector in like_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        text = element.text.strip()
+                        if text and text.isdigit():
+                            return int(text)
+                except:
+                    continue
+
+            # Если в элементах не нашли, пробуем в тексте
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-
             if rating_pattern:
                 likes, rating, dislikes = rating_pattern[0]
                 return int(likes)
+
             return None
 
         except Exception as e:
@@ -230,18 +234,57 @@ class FilmParser:
             return None
 
     def _extract_lf_dislikes(self) -> Optional[int]:
-        """Извлекает дизлайки LordFilm"""
+        """Извлекает дизлайки LordFilm из элементов страницы"""
         try:
+            # Сначала пробуем найти в элементах
+            dislike_selectors = [
+                "div.rate-minus span.msc",
+                ".rate-minus .msc",
+                "[class*='rate-minus'] [class*='msc']",
+                "#ms-\\d+ .msc"
+            ]
+
+            for selector in dislike_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        text = element.text.strip()
+                        if text and text.isdigit():
+                            return int(text)
+                except:
+                    continue
+
+            # Если в элементах не нашли, пробуем в тексте
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-
             if rating_pattern:
                 likes, rating, dislikes = rating_pattern[0]
                 return int(dislikes)
+
             return None
 
         except Exception as e:
             logger.debug(f"Ошибка извлечения LF дизлайков: {e}")
+            return None
+
+    def _extract_lf_rating(self) -> Optional[float]:
+        """Рассчитывает рейтинг LordFilm: (лайки * 10) / (лайки + дизлайки)"""
+        try:
+            likes = self._extract_lf_likes()
+            dislikes = self._extract_lf_dislikes()
+
+            if likes is None or dislikes is None:
+                return None
+
+            total = likes + dislikes
+            if total == 0:
+                return 0.0
+
+            rating = (likes * 10) / total
+            return round(rating, 1)
+
+        except Exception as e:
+            logger.debug(f"Ошибка расчета LF рейтинга: {e}")
             return None
 
     def _extract_kp_rating(self) -> Optional[float]:
