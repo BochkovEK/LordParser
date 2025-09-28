@@ -162,3 +162,14 @@ python scripts/test_url_generator.py
 
 # Тестируем парсер ссылок
 python scripts/test_link_parser.py
+
+# Тестируем записи результата парсер ссылок в БД
+python scripts/test_db_links.py
+
+# Тестируем сбор дополнительной информации о фильмах
+python scripts/test_film_parser.py
+
+# Тестируем записи результата парсер допольнительной информации о фильмах в БД
+python scripts/test_db_film_details.py
+
+

@@ -205,17 +205,67 @@ class FilmParser:
         except:
             return None
 
-    def _extract_lf_rating(self) -> Optional[float]:
-        """Извлекает рейтинг LordFilm"""
+    def _extract_lf_rating_debug(self) -> dict:
+        """Debug версия: извлекает рейтинг LordFilm с информацией о стратегиях"""
+        result = {
+            'rating': None,
+            'likes': None,
+            'dislikes': None,
+            'strategy': None,
+            'debug_info': '',
+            'all_matches': []
+        }
+
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            # Ищем паттерн чисел: число число.число число
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-            if rating_pattern:
-                return float(rating_pattern[0][1])  # Второе число - рейтинг
-            return None
-        except:
-            return None
+
+            # Стратегия 1: Паттерн "число число.число число"
+            pattern1 = r'(\d+)\s+(\d+\.\d+)\s+(\d+)'
+            matches1 = re.findall(pattern1, body_text)
+            result['all_matches'].append(f"pattern1: {matches1}")
+
+            if matches1:
+                likes, rating, dislikes = matches1[0]
+                result['rating'] = float(rating)
+                result['likes'] = int(likes)
+                result['dislikes'] = int(dislikes)
+                result['strategy'] = 'regex_triple_pattern'
+                result['debug_info'] = f"Найден по паттерну: число число.число число"
+                return result
+
+            # Стратегия 2: Поиск отдельных чисел в определенных элементах
+            rating_elements = self.driver.find_elements(By.CSS_SELECTOR,
+                                                        "[class*='rating'], [class*='like'], [class*='dislike']")
+
+            for element in rating_elements:
+                text = element.text.strip()
+                result['all_matches'].append(f"element_{element.get_attribute('class')}: {text}")
+
+                # Ищем три числа подряд
+                numbers = re.findall(r'\d+', text)
+                if len(numbers) >= 3:
+                    result['likes'] = int(numbers[0])
+                    result['rating'] = float(f"{numbers[1]}.{numbers[2]}")
+                    result['dislikes'] = int(numbers[3]) if len(numbers) > 3 else None
+                    result['strategy'] = 'element_class_triple'
+                    result['debug_info'] = f"Найден в элементе: {element.get_attribute('class')}"
+                    return result
+
+            # Стратегия 3: Поиск в разных местах
+            # Ищем все числа с точками (рейтинги)
+            all_ratings = re.findall(r'\d+\.\d+', body_text)
+            # Ищем все целые числа (лайки/дизлайки)
+            all_integers = re.findall(r'\b\d+\b', body_text)
+
+            result['all_matches'].append(f"all_ratings: {all_ratings}")
+            result['all_matches'].append(f"all_integers: {all_integers}")
+
+            result['debug_info'] = "Рейтинг не найден ни одной стратегией"
+
+        except Exception as e:
+            result['debug_info'] = f"Ошибка: {str(e)}"
+
+        return result
 
     def _extract_lf_likes(self) -> Optional[int]:
         """Извлекает количество лайков LordFilm"""
