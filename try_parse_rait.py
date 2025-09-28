@@ -6,8 +6,11 @@ from selenium.webdriver.chrome.options import Options
 import json
 import time
 import re
+import os
+from pathlib import Path
 
 SELENIUM_URL = "http://localhost:4444/wd/hub"
+CACHE_DIR = "html_cache"
 
 
 def setup_driver():
@@ -26,23 +29,52 @@ def setup_driver():
     return driver
 
 
+def get_page_content(driver, url):
+    """Получает содержимое страницы с кэшированием"""
+    # Создаем директорию для кэша
+    Path(CACHE_DIR).mkdir(exist_ok=True)
+
+    # Генерируем имя файла из URL
+    filename = re.sub(r'[^a-zA-Z0-9]', '_', url) + ".html"
+    cache_path = os.path.join(CACHE_DIR, filename)
+
+    # Пробуем загрузить из кэша
+    if os.path.exists(cache_path):
+        print(f"📁 Загружаем из кэша: {cache_path}")
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    # Если нет в кэше, загружаем через Selenium
+    print(f"🌐 Загружаем через Selenium: {url}")
+    driver.get(url)
+    WebDriverWait(driver, 10).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+    time.sleep(3)
+
+    content = driver.page_source
+
+    # Сохраняем в кэш
+    with open(cache_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print(f"💾 Сохранено в кэш: {cache_path}")
+
+    return content
+
+
 def extract_movie_data_with_targets(driver, url, target_values):
     """
     Извлекает информацию о фильме с целевым поиском рейтинга
-    target_values: [лайки, рейтинг, дизлайки]
     """
     print(f"🎯 Анализируем URL: {url}")
     print(f"🎯 Целевые значения: лайки={target_values[0]}, рейтинг={target_values[1]}, дизлайки={target_values[2]}")
 
     try:
-        driver.get(url)
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        time.sleep(3)
+        # Получаем содержимое страницы (из кэша или через Selenium)
+        page_content = get_page_content(driver, url)
 
         # Извлекаем рейтинг LordFilm с анализом стратегий
-        ratings_analysis = extract_ratings_with_analysis(driver, target_values)
+        ratings_analysis = extract_ratings_with_analysis(page_content, target_values)
 
         return {
             "url": url,
@@ -59,7 +91,7 @@ def extract_movie_data_with_targets(driver, url, target_values):
         }
 
 
-def extract_ratings_with_analysis(driver, target_values):
+def extract_ratings_with_analysis(page_content, target_values):
     """
     Анализирует стратегии поиска рейтинга с целевыми значениями
     """
@@ -72,76 +104,101 @@ def extract_ratings_with_analysis(driver, target_values):
     }
 
     try:
-        body_text = driver.find_element(By.TAG_NAME, "body").text
+        # Извлекаем текст из HTML
+        body_text = extract_text_from_html(page_content)
 
-        # Стратегия 1: Оригинальный рабочий паттерн "число число.число число"
+        # СТРАТЕГИЯ 1: Исходный способ (без проверки валидности)
         strategy1_matches = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
         analysis['strategies_tried'].append({
-            'name': 'Оригинальный паттерн (число число.число число)',
+            'name': '1. Исходный паттерн (число число.число число)',
             'matches': strategy1_matches,
-            'score': calculate_accuracy(strategy1_matches, target_values)
+            'score': len(strategy1_matches)  # Просто количество найденных совпадений
         })
 
-        # Стратегия 2: Паттерн для нулевых рейтингов "число 0 число"
-        strategy2_matches = re.findall(r'(\d+)\s+0\s+(\d+)', body_text)
+        # СТРАТЕГИЯ 2: Паттерн для целых чисел
+        strategy2_matches = re.findall(r'(\d+)\s+(\d+)\s+(\d+)', body_text)
         analysis['strategies_tried'].append({
-            'name': 'Паттерн для нулевых рейтингов (число 0 число)',
+            'name': '2. Паттерн целые числа (число число число)',
             'matches': strategy2_matches,
-            'score': calculate_accuracy(strategy2_matches, target_values, is_zero_rating=True)
+            'score': len(strategy2_matches)
         })
 
-        # Стратегия 3: Паттерн "число 0.0 число"
-        strategy3_matches = re.findall(r'(\d+)\s+0\.0\s+(\d+)', body_text)
+        # СТРАТЕГИЯ 3: Паттерн для нулевых рейтингов
+        strategy3_matches = re.findall(r'(\d+)\s+0\s+(\d+)', body_text)
         analysis['strategies_tried'].append({
-            'name': 'Паттерн для нулевых рейтингов (число 0.0 число)',
+            'name': '3. Паттерн нулевой рейтинг (число 0 число)',
             'matches': strategy3_matches,
-            'score': calculate_accuracy(strategy3_matches, target_values, is_zero_rating=True)
+            'score': len(strategy3_matches)
         })
 
-        # Стратегия 4: Поиск трех чисел через разные разделители
-        strategy4_matches = re.findall(r'(\d+)[\s\-]+(\d+\.?\d*)[\s\-]+(\d+)', body_text)
+        # СТРАТЕГИЯ 4: Паттерн для нулевых рейтингов с точкой
+        strategy4_matches = re.findall(r'(\d+)\s+0\.0\s+(\d+)', body_text)
         analysis['strategies_tried'].append({
-            'name': 'Гибкий паттерн (разные разделители)',
+            'name': '4. Паттерн нулевой рейтинг (число 0.0 число)',
             'matches': strategy4_matches,
-            'score': calculate_accuracy(strategy4_matches, target_values)
+            'score': len(strategy4_matches)
         })
 
-        # Стратегия 5: Поиск в элементах с классами rating (более агрессивный)
-        strategy5_matches = find_rating_elements_aggressive(driver, target_values)
+        # СТРАТЕГИЯ 5: Гибкий паттерн с разными разделителями
+        strategy5_matches = re.findall(r'(\d+)[\s\-]+(\d+\.?\d*)[\s\-]+(\d+)', body_text)
         analysis['strategies_tried'].append({
-            'name': 'Агрессивный поиск в элементах',
+            'name': '5. Гибкий паттерн (разные разделители)',
             'matches': strategy5_matches,
-            'score': calculate_accuracy(strategy5_matches, target_values)
+            'score': len(strategy5_matches)
         })
 
-        # Стратегия 6: Поиск по всему DOM с приоритетом видимых элементов
-        strategy6_matches = find_visible_ratings(driver, target_values)
+        # СТРАТЕГИЯ 6: Поиск в HTML атрибутах
+        strategy6_matches = find_ratings_in_attributes(page_content)
         analysis['strategies_tried'].append({
-            'name': 'Поиск в видимых элементах',
+            'name': '6. Поиск в data-атрибутах',
             'matches': strategy6_matches,
-            'score': calculate_accuracy(strategy6_matches, target_values)
+            'score': len(strategy6_matches)
         })
 
-        # Стратегия 7: Поиск конкретных чисел из целевых значений
-        strategy7_matches = find_specific_numbers(driver, target_values)
+        # СТРАТЕГИЯ 7: Поиск в meta-тегах
+        strategy7_matches = find_ratings_in_meta(page_content)
         analysis['strategies_tried'].append({
-            'name': 'Поиск конкретных целевых чисел',
+            'name': '7. Поиск в meta-тегах',
             'matches': strategy7_matches,
-            'score': calculate_accuracy(strategy7_matches, target_values)
+            'score': len(strategy7_matches)
         })
 
-        # Находим лучшую стратегию
+        # СТРАТЕГИЯ 8: Поиск в script-тегах
+        strategy8_matches = find_ratings_in_scripts(page_content)
+        analysis['strategies_tried'].append({
+            'name': '8. Поиск в JavaScript',
+            'matches': strategy8_matches,
+            'score': len(strategy8_matches)
+        })
+
+        # СТРАТЕГИЯ 9: Поиск по классам в HTML
+        strategy9_matches = find_ratings_in_classes(page_content)
+        analysis['strategies_tried'].append({
+            'name': '9. Поиск по CSS классам',
+            'matches': strategy9_matches,
+            'score': len(strategy9_matches)
+        })
+
+        # СТРАТЕГИЯ 10: Поиск конкретных целевых чисел
+        strategy10_matches = find_specific_numbers_in_text(body_text, target_values)
+        analysis['strategies_tried'].append({
+            'name': '10. Поиск целевых чисел',
+            'matches': strategy10_matches,
+            'score': len(strategy10_matches)
+        })
+
+        # Находим стратегию с наибольшим количеством совпадений
         best_strategy = max(analysis['strategies_tried'], key=lambda x: x['score'])
         analysis['best_match'] = best_strategy
         analysis['accuracy_score'] = best_strategy['score']
 
-        if best_strategy['matches'] and best_strategy['score'] > 0:
-            # Берем первое наилучшее совпадение
+        # Берем первое найденное совпадение из лучшей стратегии
+        if best_strategy['matches']:
             best_match = best_strategy['matches'][0]
             try:
                 analysis['found_values'] = {
                     'likes': int(best_match[0]),
-                    'rating': float(best_match[1]) if '.' in str(best_match[1]) else float(best_match[1]),
+                    'rating': float(best_match[1]),
                     'dislikes': int(best_match[2])
                 }
             except (ValueError, IndexError):
@@ -149,10 +206,9 @@ def extract_ratings_with_analysis(driver, target_values):
 
         # Дополнительная диагностика
         analysis['debug_info'] = {
-            'all_triple_patterns': re.findall(r'(\d+)\s+(\S+)\s+(\d+)', body_text),
-            'all_double_patterns': re.findall(r'(\d+)\s+(\S+)', body_text),
-            'all_rating_elements': len(driver.find_elements(By.CSS_SELECTOR, "[class*='rating'], [class*='vote']")),
-            'body_text_sample': body_text[:500] + "..." if len(body_text) > 500 else body_text
+            'all_triple_patterns': re.findall(r'(\d+)\s+(\S+)\s+(\d+)', body_text)[:5],
+            'total_triples_found': len(re.findall(r'(\d+)\s+(\S+)\s+(\d+)', body_text)),
+            'body_text_length': len(body_text)
         }
 
     except Exception as e:
@@ -161,115 +217,106 @@ def extract_ratings_with_analysis(driver, target_values):
     return analysis
 
 
-def calculate_accuracy(matches, target_values, is_zero_rating=False):
-    """Вычисляет точность совпадения с целевыми значениями"""
-    if not matches:
-        return 0
-
-    target_likes, target_rating, target_dislikes = target_values
-    best_score = 0
-
-    for match in matches:
-        try:
-            if len(match) < 3:
-                continue
-
-            found_likes = int(match[0])
-
-            # Обрабатываем рейтинг (может быть "0", "0.0", "5.4")
-            rating_str = str(match[1])
-            if '.' in rating_str:
-                found_rating = float(rating_str)
-            else:
-                found_rating = float(rating_str)  # "0" -> 0.0
-
-            found_dislikes = int(match[2])
-
-            # Для нулевых рейтингов более строгая проверка
-            if is_zero_rating:
-                likes_score = 1 if found_likes == target_likes else 0
-                rating_score = 1 if found_rating == 0 else 0
-                dislikes_score = 1 if found_dislikes == target_dislikes else 0
-            else:
-                # Для ненулевых рейтингов допускаем небольшие отклонения
-                likes_score = 1 if found_likes == target_likes else 0.3 if abs(found_likes - target_likes) <= 5 else 0
-                rating_score = 1 if abs(found_rating - target_rating) < 0.1 else 0.5 if abs(
-                    found_rating - target_rating) < 1 else 0
-                dislikes_score = 1 if found_dislikes == target_dislikes else 0.3 if abs(
-                    found_dislikes - target_dislikes) <= 5 else 0
-
-            total_score = (likes_score + rating_score + dislikes_score) / 3
-            best_score = max(best_score, total_score)
-
-        except (ValueError, IndexError):
-            continue
-
-    return best_score
+def extract_text_from_html(html_content):
+    """Извлекает текст из HTML содержимого"""
+    # Простой способ извлечения текста (убираем теги)
+    text = re.sub(r'<[^>]+>', ' ', html_content)
+    # Убираем лишние пробелы
+    text = re.sub(r'\s+', ' ', text)
+    return text
 
 
-def find_rating_elements_aggressive(driver, target_values):
-    """Агрессивный поиск в элементах с разными классами"""
+def find_ratings_in_attributes(html_content):
+    """Ищет рейтинги в data-атрибутах"""
     matches = []
     try:
-        # Расширенный список классов для поиска
-        class_selectors = [
-            "[class*='rating']", "[class*='vote']", "[class*='like']", "[class*='dislike']",
-            "[class*='score']", "[class*='rate']", "[class*='stat']", "[class*='count']"
+        # Ищем в data-атрибутах
+        data_patterns = [
+            r'data-likes=["\']?(\d+)["\']?.*?data-rating=["\']?(\d+\.?\d*)["\']?.*?data-dislikes=["\']?(\d+)["\']?',
+            r'data-rating=["\']?(\d+\.?\d*)["\']?.*?data-likes=["\']?(\d+)["\']?.*?data-dislikes=["\']?(\d+)["\']?',
         ]
 
-        for selector in class_selectors:
-            elements = driver.find_elements(By.CSS_SELECTOR, selector)
-            for element in elements:
-                text = element.text.strip()
-                # Ищем три числа
-                numbers = re.findall(r'\d+', text)
-                if len(numbers) >= 3:
-                    matches.append(numbers[:3])
-                    # Также пробуем найти числа с точками
-                    decimal_match = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', text)
-                    if decimal_match:
-                        matches.extend(decimal_match)
+        for pattern in data_patterns:
+            found = re.findall(pattern, html_content, re.DOTALL)
+            if found:
+                matches.extend(found)
 
     except Exception as e:
-        print(f"Ошибка агрессивного поиска: {e}")
+        print(f"Ошибка поиска в атрибутах: {e}")
 
     return matches
 
 
-def find_visible_ratings(driver, target_values):
-    """Поиск в видимых элементах (не скрытых)"""
+def find_ratings_in_meta(html_content):
+    """Ищет рейтинги в meta-тегах"""
     matches = []
     try:
-        # Ищем все элементы с числами
-        elements = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
+        meta_patterns = [
+            r'<meta[^>]*name=["\']?rating["\'][^>]*content=["\']?(\d+\.?\d*)["\']',
+            r'<meta[^>]*property=["\']?og:rating["\'][^>]*content=["\']?(\d+\.?\d*)["\']',
+        ]
 
-        for element in elements:
-            if element.is_displayed():  # Только видимые элементы
-                text = element.text.strip()
-                # Ищем разные паттерны
-                patterns = [
-                    r'(\d+)\s+(\d+\.\d+)\s+(\d+)',
-                    r'(\d+)\s+(\d+)\s+(\d+)',
-                    r'(\d+)\s+0\s+(\d+)',
-                    r'(\d+)\s+0\.0\s+(\d+)'
-                ]
-                for pattern in patterns:
-                    found = re.findall(pattern, text)
-                    if found:
-                        matches.extend(found)
+        for pattern in meta_patterns:
+            found = re.findall(pattern, html_content)
+            for rating in found:
+                # Для meta обычно только рейтинг, добавляем заглушки для лайков/дизлайков
+                matches.append(('0', rating, '0'))
 
     except Exception as e:
-        print(f"Ошибка поиска в видимых элементах: {e}")
+        print(f"Ошибка поиска в meta: {e}")
 
     return matches
 
 
-def find_specific_numbers(driver, target_values):
-    """Поиск конкретных целевых чисел на странице"""
+def find_ratings_in_scripts(html_content):
+    """Ищет рейтинги в JavaScript коде"""
+    matches = []
+    try:
+        # Ищем в script тегах
+        script_patterns = [
+            r'likes[\s:=\-]+(\d+).*?rating[\s:=\-]+(\d+\.?\d*).*?dislikes[\s:=\-]+(\d+)',
+            r'rating[\s:=\-]+(\d+\.?\d*).*?likes[\s:=\-]+(\d+).*?dislikes[\s:=\-]+(\d+)',
+        ]
+
+        scripts = re.findall(r'<script[^>]*>(.*?)</script>', html_content, re.DOTALL)
+        for script in scripts:
+            for pattern in script_patterns:
+                found = re.findall(pattern, script, re.DOTALL)
+                if found:
+                    matches.extend(found)
+
+    except Exception as e:
+        print(f"Ошибка поиска в scripts: {e}")
+
+    return matches
+
+
+def find_ratings_in_classes(html_content):
+    """Ищет рейтинги по CSS классам"""
+    matches = []
+    try:
+        # Ищем элементы с классами рейтингов
+        class_patterns = [
+            r'class=["\'][^"\']*rating[^"\']*["\'][^>]*>.*?(\d+).*?(\d+\.?\d*).*?(\d+)',
+            r'class=["\'][^"\']*like[^"\']*["\'][^>]*>.*?(\d+).*?class=["\'][^"\']*rating[^"\']*["\'][^>]*>.*?(\d+\.?\d*).*?class=["\'][^"\']*dislike[^"\']*["\'][^>]*>.*?(\d+)',
+        ]
+
+        for pattern in class_patterns:
+            found = re.findall(pattern, html_content, re.DOTALL)
+            if found:
+                matches.extend(found)
+
+    except Exception as e:
+        print(f"Ошибка поиска в классах: {e}")
+
+    return matches
+
+
+def find_specific_numbers_in_text(body_text, target_values):
+    """Ищет конкретные целевые числа в тексте"""
     matches = []
     try:
         target_likes, target_rating, target_dislikes = target_values
-        body_text = driver.find_element(By.TAG_NAME, "body").text
 
         # Ищем комбинации где есть наши целевые числа
         patterns = [
@@ -289,79 +336,7 @@ def find_specific_numbers(driver, target_values):
     return matches
 
 
-def calculate_accuracy(matches, target_values, is_integer=False):
-    """Вычисляет точность совпадения с целевыми значениями"""
-    if not matches:
-        return 0
-
-    target_likes, target_rating, target_dislikes = target_values
-    best_score = 0
-
-    for match in matches:
-        try:
-            found_likes = int(match[0])
-            found_rating = float(match[1]) if not is_integer else float(match[1])
-            found_dislikes = int(match[2])
-
-            # Вычисляем точность для каждого значения
-            likes_score = 1 if found_likes == target_likes else 0.5 if abs(found_likes - target_likes) <= 10 else 0
-            rating_score = 1 if abs(found_rating - target_rating) < 0.1 else 0.5 if abs(
-                found_rating - target_rating) < 1 else 0
-            dislikes_score = 1 if found_dislikes == target_dislikes else 0.5 if abs(
-                found_dislikes - target_dislikes) <= 10 else 0
-
-            total_score = (likes_score + rating_score + dislikes_score) / 3
-            best_score = max(best_score, total_score)
-
-        except (ValueError, IndexError):
-            continue
-
-    return best_score
-
-
-def find_adjacent_numbers(driver, target_values):
-    """Ищет три числа расположенных рядом в DOM"""
-    matches = []
-    try:
-        # Ищем элементы содержащие числа
-        elements_with_numbers = driver.find_elements(By.XPATH, "//*[text()[contains(., ' ')]]")
-
-        for element in elements_with_numbers:
-            text = element.text.strip()
-            # Ищем три числа подряд
-            numbers = re.findall(r'\d+', text)
-            if len(numbers) >= 3:
-                # Проверяем разные комбинации трех чисел
-                for i in range(len(numbers) - 2):
-                    triple = numbers[i:i + 3]
-                    matches.append(triple)
-
-    except Exception as e:
-        print(f"Ошибка поиска соседних чисел: {e}")
-
-    return matches
-
-
-def find_rating_elements(driver, target_values):
-    """Ищет рейтинги в элементах с определенными классами"""
-    matches = []
-    try:
-        rating_elements = driver.find_elements(By.CSS_SELECTOR,
-                                               "[class*='rating'], [class*='like'], [class*='dislike'], [class*='vote']")
-
-        for element in rating_elements:
-            text = element.text.strip()
-            numbers = re.findall(r'\d+', text)
-            if len(numbers) >= 3:
-                matches.append(numbers[:3])
-
-    except Exception as e:
-        print(f"Ошибка поиска в элементах рейтинга: {e}")
-
-    return matches
-
-
-# Основная функция
+# Основная функция (остается без изменений)
 def main():
     with open('config.json', 'r') as f:
         config = json.load(f)
@@ -379,49 +354,36 @@ def main():
 
                     print(f"\n🎯 РЕЗУЛЬТАТЫ ДЛЯ: {url}")
                     print(f"🎯 Целевые значения: лайки={targets[0]}, рейтинг={targets[1]}, дизлайки={targets[2]}")
-                    print(f"📊 Точность: {analysis['accuracy_score']:.2%}")
+                    print(f"📊 Лучшая стратегия нашла: {analysis['accuracy_score']} совпадений")
 
                     if analysis['found_values']:
                         found = analysis['found_values']
-                        target_likes, target_rating, target_dislikes = targets
-
                         print(
                             f"✅ Найдено: лайки={found['likes']}, рейтинг={found['rating']}, дизлайки={found['dislikes']}")
 
-                        # Сравнение с целевыми значениями
-                        print(f"📈 Сравнение:")
-                        print(
-                            f"   Лайки: найдено {found['likes']} vs целевое {target_likes} {'✅' if found['likes'] == target_likes else '❌'}")
-                        print(
-                            f"   Рейтинг: найдено {found['rating']} vs целевое {target_rating} {'✅' if abs(found['rating'] - target_rating) < 0.1 else '❌'}")
-                        print(
-                            f"   Дизлайки: найдено {found['dislikes']} vs целевое {target_dislikes} {'✅' if found['dislikes'] == target_dislikes else '❌'}")
-
-                    print(f"\n🔍 СТРАТЕГИИ ПОИСКА:")
+                    print(f"\n🔍 ВСЕ СТРАТЕГИИ:")
                     for strategy in analysis['strategies_tried']:
-                        status = "✅" if strategy['score'] > 0.8 else "⚠️" if strategy['score'] > 0.3 else "❌"
-                        print(f"   {status} {strategy['name']}: {strategy['score']:.2%}")
+                        status = "✅" if strategy['score'] > 0 else "❌"
+                        print(f"   {status} {strategy['name']}: {strategy['score']} совпадений")
                         if strategy['matches']:
-                            print(f"      Совпадения: {strategy['matches'][:2]}")  # Показываем первые 2
+                            print(f"      Пример: {strategy['matches'][0]}")
 
-                    # Показываем дополнительную диагностику
+                    # Показываем диагностику
                     if 'debug_info' in analysis:
                         debug = analysis['debug_info']
                         print(f"\n🔧 ДИАГНОСТИКА:")
-                        print(f"   Все тройки чисел: {debug.get('all_triple_numbers', [])[:3]}")
-                        print(f"   Элементов с rating: {debug.get('all_rating_elements', 0)}")
-
-                    if analysis['accuracy_score'] < 0.8:
-                        print(f"\n🔧 РЕКОМЕНДАЦИЯ: Нужно улучшить стратегию поиска")
+                        print(f"   Примеры троек: {debug.get('all_triple_patterns', [])}")
+                        print(f"   Всего троек: {debug.get('total_triples_found', 0)}")
 
                 else:
                     print(f"❌ Ошибка: {result['error']}")
 
                 print("=" * 80)
-                time.sleep(2)
+                time.sleep(1)  # Уменьшили паузу для кэшированных запросов
 
     finally:
         driver.quit()
+
 
 if __name__ == "__main__":
     main()
