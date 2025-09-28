@@ -21,7 +21,7 @@ SELENIUM_URL = os.getenv('SELENIUM_URL', 'http://localhost:4444/wd/hub')
 BOT_TOKEN = os.getenv('BOT_TOKEN', '')
 
 # Основные настройки парсера
-DEFAULT_URL = "https://wk.lordfilm17.ru/"
+DEFAULT_URL = "https://wk.lordfilm17.ru"
 DEFAULT_CATEGORY = "filmy"
 # DEFAULT_PAGES = 10
 # DEFAULT_TOP_LIST = 10
