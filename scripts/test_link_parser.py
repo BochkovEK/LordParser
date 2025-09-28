@@ -2,7 +2,7 @@
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.parser.link_parser import LinkParser
 from src.parser.url_generator import URLGenerator
