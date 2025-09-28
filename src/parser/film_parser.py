@@ -82,9 +82,11 @@ class FilmParser:
                 'director': self._extract_director(),
                 'actors': self._extract_actors(),
                 'description': self._extract_description(),
+                # LordFilm рейтинги
                 'lf_rating': self._extract_lf_rating(),
                 'lf_likes': self._extract_lf_likes(),
                 'lf_dislikes': self._extract_lf_dislikes(),
+                # Другие рейтинги
                 'kp_rating': self._extract_kp_rating(),
                 'imdb_rating': self._extract_imdb_rating(),
             }
@@ -205,6 +207,52 @@ class FilmParser:
         except:
             return None
 
+    def _extract_lf_rating(self) -> Optional[float]:
+        """Извлекает рейтинг LordFilm"""
+        try:
+            body_text = self.driver.find_element(By.TAG_NAME, "body").text
+            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+
+            if rating_pattern:
+                likes, rating, dislikes = rating_pattern[0]
+                return float(rating)
+            return None
+
+        except Exception as e:
+            logger.debug(f"Ошибка извлечения LF рейтинга: {e}")
+            return None
+
+    def _extract_lf_likes(self) -> Optional[int]:
+        """Извлекает лайки LordFilm"""
+        try:
+            body_text = self.driver.find_element(By.TAG_NAME, "body").text
+            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+
+            if rating_pattern:
+                likes, rating, dislikes = rating_pattern[0]
+                return int(likes)
+            return None
+
+        except Exception as e:
+            logger.debug(f"Ошибка извлечения LF лайков: {e}")
+            return None
+
+    def _extract_lf_dislikes(self) -> Optional[int]:
+        """Извлекает дизлайки LordFilm"""
+        try:
+            body_text = self.driver.find_element(By.TAG_NAME, "body").text
+            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
+
+            if rating_pattern:
+                likes, rating, dislikes = rating_pattern[0]
+                return int(dislikes)
+            return None
+
+        except Exception as e:
+            logger.debug(f"Ошибка извлечения LF дизлайков: {e}")
+            return None
+
+    # DEBUG ВЕРСИИ МЕТОДОВ
     def _extract_lf_rating_debug(self) -> dict:
         """Debug версия: извлекает рейтинг LordFilm с информацией о стратегиях"""
         result = {
@@ -233,7 +281,7 @@ class FilmParser:
                 result['debug_info'] = f"Найден по паттерну: число число.число число"
                 return result
 
-            # Стратегия 2: Поиск отдельных чисел в определенных элементах
+            # Стратегия 2: Поиск в элементах
             rating_elements = self.driver.find_elements(By.CSS_SELECTOR,
                                                         "[class*='rating'], [class*='like'], [class*='dislike']")
 
@@ -241,7 +289,6 @@ class FilmParser:
                 text = element.text.strip()
                 result['all_matches'].append(f"element_{element.get_attribute('class')}: {text}")
 
-                # Ищем три числа подряд
                 numbers = re.findall(r'\d+', text)
                 if len(numbers) >= 3:
                     result['likes'] = int(numbers[0])
@@ -251,43 +298,12 @@ class FilmParser:
                     result['debug_info'] = f"Найден в элементе: {element.get_attribute('class')}"
                     return result
 
-            # Стратегия 3: Поиск в разных местах
-            # Ищем все числа с точками (рейтинги)
-            all_ratings = re.findall(r'\d+\.\d+', body_text)
-            # Ищем все целые числа (лайки/дизлайки)
-            all_integers = re.findall(r'\b\d+\b', body_text)
-
-            result['all_matches'].append(f"all_ratings: {all_ratings}")
-            result['all_matches'].append(f"all_integers: {all_integers}")
-
-            result['debug_info'] = "Рейтинг не найден ни одной стратегией"
+            result['debug_info'] = "Рейтинг не найден"
 
         except Exception as e:
             result['debug_info'] = f"Ошибка: {str(e)}"
 
         return result
-
-    def _extract_lf_likes(self) -> Optional[int]:
-        """Извлекает количество лайков LordFilm"""
-        try:
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-            if rating_pattern:
-                return int(rating_pattern[0][0])  # Первое число - лайки
-            return None
-        except:
-            return None
-
-    def _extract_lf_dislikes(self) -> Optional[int]:
-        """Извлекает количество дизлайков LordFilm"""
-        try:
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-            if rating_pattern:
-                return int(rating_pattern[0][2])  # Третье число - дизлайки
-            return None
-        except:
-            return None
 
     def _extract_kp_rating(self) -> Optional[float]:
         """Извлекает рейтинг КиноПоиск"""
