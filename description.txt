@@ -1,5 +1,7 @@
 ssh EBochkov@10.224.151.215
+user: kolla
 
+git clone https://Bochkov@github.com/BochkovEK/lord_parser.git && \
 git clone https://Bochkov@github.com/BochkovEK/LordParser.git && \
 cd LordParser;
 git checkout dev
@@ -11,7 +13,13 @@ pip install virtualenv -i https://pypi.org/simple/
 export PATH="/usr/local/bin:$PATH"
 !!! python3 -m venv --system-site-packages ./venv-lp
 #virtualenv --system-site-packages -p python ./venv
-source ./venv/bin/activate
+source ./venv-lp/bin/activate
+#password source
+source /home/kolla/lord_parser/.env
+    export POSTGRES_PASSWORD=""
+    export BOT_TOKEN=""
+
+
 
 pip install -r requirements.txt -i https://pypi.org/simple/
 

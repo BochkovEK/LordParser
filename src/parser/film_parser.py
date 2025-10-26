@@ -200,147 +200,72 @@ class FilmParser:
             return None
 
     def _extract_lf_likes(self) -> Optional[int]:
-        """Извлекает лайки LordFilm из элементов страницы"""
+        """Извлекает лайки LordFilm (надежный метод из второго скрипта)"""
         try:
-            # Сначала пробуем найти в элементах
-            like_selectors = [
-                "div.rate-plus span.psc",
-                ".rate-plus .psc",
-                "[class*='rate-plus'] [class*='psc']",
-                "#ps-\\d+ .psc"
-            ]
-
-            for selector in like_selectors:
-                try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        text = element.text.strip()
-                        if text and text.isdigit():
-                            return int(text)
-                except:
-                    continue
-
-            # Если в элементах не нашли, пробуем в тексте
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-            if rating_pattern:
-                likes, rating, dislikes = rating_pattern[0]
-                return int(likes)
-
+            likes_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.rate-plus span.psc")
+            if likes_elements:
+                likes_text = likes_elements[0].text.strip()
+                if likes_text.isdigit():
+                    return int(likes_text)
             return None
-
         except Exception as e:
-            logger.debug(f"Ошибка извлечения LF лайков: {e}")
+            logger.debug(f"Ошибка извлечения лайков: {e}")
             return None
 
     def _extract_lf_dislikes(self) -> Optional[int]:
-        """Извлекает дизлайки LordFilm из элементов страницы"""
+        """Извлекает дизлайки LordFilm (надежный метод из второго скрипта)"""
         try:
-            # Сначала пробуем найти в элементах
-            dislike_selectors = [
-                "div.rate-minus span.msc",
-                ".rate-minus .msc",
-                "[class*='rate-minus'] [class*='msc']",
-                "#ms-\\d+ .msc"
-            ]
-
-            for selector in dislike_selectors:
-                try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        text = element.text.strip()
-                        if text and text.isdigit():
-                            return int(text)
-                except:
-                    continue
-
-            # Если в элементах не нашли, пробуем в тексте
-            body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            rating_pattern = re.findall(r'(\d+)\s+(\d+\.\d+)\s+(\d+)', body_text)
-            if rating_pattern:
-                likes, rating, dislikes = rating_pattern[0]
-                return int(dislikes)
-
+            dislikes_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.rate-minus span.msc")
+            if dislikes_elements:
+                dislikes_text = dislikes_elements[0].text.strip()
+                if dislikes_text.isdigit():
+                    return int(dislikes_text)
             return None
-
         except Exception as e:
-            logger.debug(f"Ошибка извлечения LF дизлайков: {e}")
+            logger.debug(f"Ошибка извлечения дизлайков: {e}")
             return None
 
     def _extract_lf_rating(self) -> Optional[float]:
-        """Рассчитывает рейтинг LordFilm: (лайки * 10) / (лайки + дизлайки)"""
-        try:
-            likes = self._extract_lf_likes()
-            dislikes = self._extract_lf_dislikes()
+        """Рассчитывает рейтинг LordFilm: (лайки / всего) * 10"""
+        likes = self._extract_lf_likes()
+        dislikes = self._extract_lf_dislikes()
 
-            if likes is None or dislikes is None:
-                return None
-
-            total = likes + dislikes
-            if total == 0:
-                return 0.0
-
-            rating = (likes * 10) / total
-            return round(rating, 1)
-
-        except Exception as e:
-            logger.debug(f"Ошибка расчета LF рейтинга: {e}")
+        if likes is None or dislikes is None:
             return None
+
+        total = likes + dislikes
+        if total == 0:
+            return 0.0
+
+        rating = (likes / total) * 10
+        return round(rating, 2)
 
     def _extract_kp_rating(self) -> Optional[float]:
-        """Извлекает рейтинг КиноПоиск из элементов страницы"""
+        """Извлекает рейтинг КиноПоиск (надежный метод из второго скрипта)"""
         try:
-            # Основной селектор из рабочего скрипта
-            kp_selectors = [
-                "div.frate.frate-kp span",
-                ".frate-kp span",
-                "[class*='frate-kp'] span"
-            ]
-
-            for selector in kp_selectors:
+            kp_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.frate.frate-kp span")
+            if kp_elements:
+                kp_text = kp_elements[0].text.strip()
                 try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        text = element.text.strip()
-                        if text:
-                            try:
-                                return float(text)
-                            except ValueError:
-                                continue
-                except:
-                    continue
-
+                    return float(kp_text)
+                except ValueError:
+                    return None
             return None
-
         except Exception as e:
             logger.debug(f"Ошибка извлечения KP рейтинга: {e}")
             return None
 
     def _extract_imdb_rating(self) -> Optional[float]:
-        """Извлекает рейтинг IMDB из элементов страницы"""
+        """Извлекает рейтинг IMDB (надежный метод из второго скрипта)"""
         try:
-            # Основной селектор из рабочего скрипта
-            imdb_selectors = [
-                "div.frate.frate-imdb span",
-                ".frate-imdb span",
-                "[class*='frate-imdb'] span"
-            ]
-
-            for selector in imdb_selectors:
+            imdb_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.frate.frate-imdb span")
+            if imdb_elements:
+                imdb_text = imdb_elements[0].text.strip()
                 try:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    for element in elements:
-                        text = element.text.strip()
-                        if text:
-                            try:
-                                return float(text)
-                            except ValueError:
-                                continue
-                except:
-                    continue
-
+                    return float(imdb_text)
+                except ValueError:
+                    return None
             return None
-
         except Exception as e:
             logger.debug(f"Ошибка извлечения IMDB рейтинга: {e}")
             return None
