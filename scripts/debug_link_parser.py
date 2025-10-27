@@ -21,8 +21,8 @@ def debug_page_parsing():
         # Тестовый URL - попробуем разные варианты
         test_urls = [
             "https://wk.lordfilm17.ru/filmy/2025/page/1/",
-            "https://lordfilm.works/films/",  # главная страница
-            "https://lordfilm.works/films/2024/",  # другой год
+            "https://wk.lordfilm17.ru",
+            "https://wk.lordfilm17.ru/filmy/2024/page/5/", # другой год
         ]
 
         for url in test_urls:
