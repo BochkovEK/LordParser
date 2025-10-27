@@ -119,40 +119,47 @@ class LinkParser:
     def _is_film_url(self, url: str) -> bool:
         """
         Проверяет, является ли URL ссылкой на конкретный фильм
-
-        Правильные фильмы: https://wk.lordfilm17.ru/filmy/54057-istorija-delfina-spasenie-bimini-2025.html
-        Неправильные:
-          - https://wk.lordfilm17.ru/filmy/sssr/ (категория)
-          - https://wk.lordfilm17.ru/filmy/2025/ (год)
-          - https://wk.lordfilm17.ru/filmy/2025/page/2/ (пагинация)
+        На основе диагностики: ссылки вида /filmy/12345-nazvanie-2025.html
         """
-        if not url or '/filmy/' not in url:
+        if not url:
             return False
 
-        # Убираем базовый URL для анализа
-        path = url.replace(self.base_url, "").replace("https://wk.lordfilm17.ru", "")
-
-        # Разбиваем путь на части
-        parts = path.split('/')
-
-        # Должно быть: /filmy/XXXXX-nazvanie-filma-2025.html
-        if len(parts) < 3:
+        # Базовые проверки
+        if '/filmy/' not in url:
             return False
 
-        # Проверяем структуру
-        film_part = parts[2]  # часть после /filmy/
+        # Исключаем очевидные НЕ-фильмы
+        exclude_patterns = [
+            r'/filmy/$',  # главная страница
+            r'/filmy/[^/]+/$',  # категории (/filmy/boevik/)
+            r'/filmy/\?',  # параметры
+            r'/filmy/\d{4}/page/',  # пагинация
+            r'top-50', 'news', 'netflix', 'marvel', 'serialy', 'multfilmy'
+        ]
 
-        # Должен быть ID в начале и год в конце
-        has_id = re.match(r'^\d+', film_part)  # начинается с цифр (ID)
-        has_year = re.search(r'\d{4}\.html$', film_part)  # заканчивается годом.html
+        if any(re.search(pattern, url) for pattern in exclude_patterns):
+            return False
 
-        # Исключаем категории и страницы
-        is_category = any(cat in film_part for cat in [
-            'sssr', 'russkie', 'amerikanskie', 'voennyj', 'komedii', 'dramy'
-        ])
-        is_pagination = 'page' in film_part
+        # Проверяем паттерн конкретного фильма: /filmy/ЦИФРЫ-название-ГОД.html
+        film_pattern = r'/filmy/\d+-[^/]+-\d{4}\.html$'
 
-        return bool(has_id and has_year and not is_category and not is_pagination)
+        # Также принимаем варианты без года в конце (на всякий случай)
+        film_pattern_alt = r'/filmy/\d+-[^/]+\.html$'
+
+        is_valid_film = (re.search(film_pattern, url) is not None or
+                         re.search(film_pattern_alt, url) is not None)
+
+        # Дополнительная проверка: должен содержать ID (цифры после /filmy/)
+        has_id = re.search(r'/filmy/(\d+)', url) is not None
+
+        result = is_valid_film and has_id
+
+        if result:
+            logger.debug(f"✅ Принята как фильм: {url}")
+        else:
+            logger.debug(f"❌ Отклонена: {url}")
+
+        return result
 
     def save_links_to_db(self, links: List[str], session_id: int) -> int:
         """
