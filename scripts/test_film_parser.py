@@ -127,11 +127,10 @@ def test_film_parser_with_db_urls():
         db_manager.connect()
         db_session = db_manager.get_session()
 
-        # Создаем сессию парсинга
+        # Создаем тестовую сессию парсинга
         test_session = ParsingSession(
             session_type="film_details_test",
-            status="running",
-            description=f"Тест парсера с {len(test_films)} фильмами из БД"
+            status="running"
         )
         db_session.add(test_session)
         db_session.commit()
