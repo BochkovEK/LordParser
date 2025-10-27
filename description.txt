@@ -19,8 +19,18 @@ source /home/kolla/lord_parser/.env
     export POSTGRES_PASSWORD=""
     export BOT_TOKEN=""
 
+Поэтапная проверка выполнения скриптов ./parser
+Проверка осуществляется через тестовые скрипты ./scripts
 
+1) python ~/lord_parser/scripts/init_db.py - создать БД
+    recreate_db.py - пересоздать БД (!!! удалив содержимое)
+2) python ~/lord_parser/scripts/test_url_generator.py - проверить генератор ссылок вида https://wk.lordfilm17.ru/filmy/2025/page/1/ (в БД не записи не создает, отдельного запуска не требует)
+3) python ~/lord_parser/scripts/test_link_parser.py - проверить собираемые ссылки на фильмы со страницы вида https://wk.lordfilm17.ru/filmy/2025/page/1/ и отправляет их в БД
+4) python ~/lord_parser/scripts/test_db_links.py - проверить сохраненные ссылки в БД
+5) python ~/lord_parser/scripts/test_film_parser.py - проверить сбор деталей фильма и отправку их в БД
+6) python ~/lord_parser/scripts/test_db_film_details.py - проверить детали фильмов сохраненные в БД
 
+=============================
 pip install -r requirements.txt -i https://pypi.org/simple/
 
 # [TEST START] Start create db
