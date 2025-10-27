@@ -74,20 +74,36 @@ class LinkParser:
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
 
-            time.sleep(2)  # Даем время для загрузки динамического контента
+            time.sleep(2)
 
-            # Ищем ВСЕ ссылки на странице
-            all_links = self.driver.find_elements(By.TAG_NAME, "a")
+            # НОВАЯ ЛОГИКА: ищем ссылки в карточках фильмов
             film_links = []
 
-            for link_element in all_links:
+            # Селекторы карточек фильмов (из диагностики)
+            card_selectors = [".th-item", ".th-in"]
+
+            for selector in card_selectors:
                 try:
-                    href = link_element.get_attribute("href")
-                    if href and self._is_film_url(href):
-                        absolute_url = urljoin(self.base_url, href)
-                        if absolute_url not in film_links:
-                            film_links.append(absolute_url)
-                except:
+                    cards = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for card in cards:
+                        try:
+                            # Ищем ссылку внутри карточки
+                            link_element = card.find_element(By.CSS_SELECTOR, "a")
+                            href = link_element.get_attribute("href")
+
+                            if href and self._is_film_url(href):
+                                absolute_url = urljoin(self.base_url, href)
+                                if absolute_url not in film_links:
+                                    film_links.append(absolute_url)
+                                    logger.debug(f"Найдена ссылка: {absolute_url}")
+                        except:
+                            continue
+
+                    if film_links:
+                        break  # Останавливаемся на первом рабочем селекторе
+
+                except Exception as e:
+                    logger.debug(f"Селектор {selector} не сработал: {e}")
                     continue
 
             logger.info(f"✅ Найдено {len(film_links)} фильмов на странице {page_url}")
