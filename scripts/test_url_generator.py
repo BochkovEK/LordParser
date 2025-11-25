@@ -8,7 +8,7 @@ import os
 # Add src to path to allow imports from any directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.utils.url_generator import URLGenerator
+from src.parser.url_generator import URLGenerator
 
 
 def test_url_generator():
