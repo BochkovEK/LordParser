@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from src.config.settings import SELENIUM_URL
+from src.config.config import SELENIUM_URL
 from src.database.connection import db_manager
 from src.database.models import Film, ParsingSession, ParsingHistory
 from src.utils.retry import retry_on_failure

@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional
 
 # Импорты ВНЕ класса
-from src.config.settings import SELENIUM_URL
+from src.config.config import SELENIUM_URL
 from src.parser.url_generator import URLGenerator
 from src.database.connection import db_manager
 from src.database.models import Film, ParsingSession, ParsingHistory

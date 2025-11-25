@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from .models import Base
-from src.config.settings import DB_CONFIG
+from src.config.config import DB_CONFIG
 
 
 class DatabaseManager:

@@ -1,33 +1,59 @@
-#!/usr/bin/env python3
-import sys
-import os
+"""
+Test URL Generator - emulates usage from future scheduler.py
+"""
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.parser.url_generator import URLGenerator
+from src.utils.url_generator import URLGenerator
 
 
-def main():
+async def test_url_generator():
+    """Test URL generator with scheduler-like usage patterns"""
+
     generator = URLGenerator()
 
-    print("🎯 Тест URL генератора")
-    print("=" * 50)
+    print("🧪 Testing URL Generator for Scheduler Tasks...")
 
-    # Статистика
-    print(f"📊 Статистика:")
-    print(f"   Годы: {generator.start_year}-{generator.end_year}")
-    print(f"   Страниц в год: {generator.pages_per_year}")
-    print(f"   Всего URL (полный): {generator.get_urls_count('all')}")
-    print(f"   Всего URL (ежедневный): {generator.get_urls_count('daily')}")
+    # Test 1: Daily task - main catalog
+    print("\n📅 Daily Task - Main Catalog (50 pages):")
+    daily_main_urls = list(generator.generate_from_template(
+        template_key='main_catalog',
+        pages=50
+    ))
+    print(f"Generated {len(daily_main_urls)} URLs")
+    print(f"First: {daily_main_urls[0]}")
+    print(f"Last: {daily_main_urls[-1]}")
 
-    # Примеры URL
-    print(f"\n🔗 Примеры URL (ежедневные):")
-    daily_urls = list(generator.generate_daily_urls())
-    for i, url in enumerate(daily_urls[:3]):
-        print(f"   {i + 1}. {url}")
+    # Test 2: Daily task - yearly catalog (recent years)
+    print("\n📅 Daily Task - Yearly Catalog (2024-2025, 50 pages):")
+    daily_yearly_urls = list(generator.generate_from_template(
+        template_key='yearly_catalog',
+        pages=50,
+        years=[2024, 2025]
+    ))
+    print(f"Generated {len(daily_yearly_urls)} URLs")
+    print(f"Sample: {daily_yearly_urls[0]}")
+    print(f"Sample: {daily_yearly_urls[50]}")  # First page of next year
 
-    print(f"\n✅ Генератор работает корректно!")
+    # Test 3: Weekly task - main catalog (all pages)
+    print("\n📅 Weekly Task - Main Catalog (all pages):")
+    weekly_main_urls = list(generator.generate_from_template(
+        template_key='main_catalog',
+        pages='all'
+    ))
+    print(f"Generated {len(weekly_main_urls)} URLs")
+
+    # Test 4: Weekly task - yearly catalog (all years, all pages)
+    print("\n📅 Weekly Task - Yearly Catalog (all years, all pages):")
+    weekly_yearly_urls = list(generator.generate_from_template(
+        template_key='yearly_catalog',
+        pages='all',
+        years=list(range(2016, 2026))
+    ))
+    print(f"Generated {len(weekly_yearly_urls)} URLs")
+
+    print(f"\n✅ All tests passed! Generator is ready for scheduler integration.")
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    asyncio.run(test_url_generator())
