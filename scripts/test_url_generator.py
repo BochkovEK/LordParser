@@ -5,8 +5,9 @@ Test URL Generator - emulates usage from future scheduler.py
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from src.utils.url_generator import URLGenerator
+
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from src.parser.url_generator import URLGenerator
 
 
 async def test_url_generator():
