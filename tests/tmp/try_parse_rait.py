@@ -116,7 +116,7 @@ def extract_movie_data(driver, url):
 
 def main():
     # Загрузка конфига
-    with open('../config.json', 'r') as f:
+    with open('../../tmp/config.json', 'r') as f:
         config = json.load(f)
 
     driver = setup_driver()

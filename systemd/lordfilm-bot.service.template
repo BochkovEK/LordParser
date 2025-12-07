@@ -1,0 +1,21 @@
+# systemd/lordfilm-bot.service.template
+[Unit]
+Description=LordFilm Telegram Bot Service
+
+[Service]
+Type=simple
+User={{USER}}
+Group={{GROUP}}
+WorkingDirectory={{PROJECT_DIR}}
+EnvironmentFile={{CONFIG_DIR}}/.env
+
+ExecStart={{PYTHON_PATH}} {{PROJECT_DIR}}/scripts/run_bot.py
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lordfilm-bot
+
+[Install]
+WantedBy=multi-user.target

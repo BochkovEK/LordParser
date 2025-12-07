@@ -1,0 +1,11 @@
+# systemd/lordfilm-parser.timer.template
+[Unit]
+Description=LordFilm Parser Timer (daily 3:00, weekly on Sunday)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target

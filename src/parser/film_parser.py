@@ -1,34 +1,45 @@
 """
-Парсер деталей фильмов с LordFilm
+Film Parser for LordFilm
+Extracts detailed information about films
 """
+
+import time
+import re
+import logging
+from typing import Dict, Any, Optional
+from datetime import datetime
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import re
-import time
-import logging
-from typing import List, Optional, Dict, Any
-from datetime import datetime
 
-from src.config.config import SELENIUM_URL
-from src.database.connection import db_manager
-from src.database.models import Film, ParsingSession, ParsingHistory
-from src.utils.retry import retry_on_failure
-from src.utils.logger import setup_logger
+from src.config.config import DEFAULT_URL, SELENIUM_URL
 
-logger = setup_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class FilmParser:
-    """Парсер для извлечения детальной информации о фильмах"""
+    """Parser for extracting film details from film pages"""
 
-    def __init__(self):
+    def __init__(self, base_url: str = None):
+        """
+        Initialize film parser
+
+        Args:
+            base_url: Base URL for reference (default from config)
+        """
+        self.base_url = base_url or DEFAULT_URL
         self.driver: Optional[webdriver.Remote] = None
 
+        # Selenium configuration
+        self.selenium_url = SELENIUM_URL
+        self.timeout = 15  # seconds
+        self.load_delay = 3  # seconds for dynamic content
+
     def setup_driver(self) -> None:
-        """Настройка Selenium WebDriver"""
+        """Setup Selenium WebDriver"""
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -38,32 +49,41 @@ class FilmParser:
 
         try:
             self.driver = webdriver.Remote(
-                command_executor=SELENIUM_URL,
+                command_executor=self.selenium_url,
                 options=chrome_options
             )
-            logger.info("✅ Selenium WebDriver инициализирован")
+            logger.info("Selenium WebDriver initialized for film parser")
         except Exception as e:
-            logger.error(f"❌ Ошибка инициализации WebDriver: {e}")
+            logger.error(f"Failed to initialize WebDriver: {e}")
             raise
 
-    @retry_on_failure(max_retries=2)
     def parse_film_details(self, film_url: str) -> Dict[str, Any]:
-        """Парсит детальную информацию о фильме"""
+        """
+        Parse detailed information about a film
+
+        Args:
+            film_url: URL of the film page
+
+        Returns:
+            Dictionary with film data or error information
+        """
         if not self.driver:
             self.setup_driver()
 
-        logger.info(f"🎬 Парсим фильм: {film_url}")
+        logger.debug(f"Parsing film: {film_url}")
 
         try:
+            # Load film page
             self.driver.get(film_url)
 
-            # Ждем загрузки страницы
-            WebDriverWait(self.driver, 15).until(
+            # Wait for page to load
+            WebDriverWait(self.driver, self.timeout).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
 
-            time.sleep(3)  # Даем время для загрузки динамического контента
+            time.sleep(self.load_delay)  # Allow dynamic content to load
 
+            # Extract film data
             film_data = {
                 'url': film_url,
                 'title': self._extract_title(),
@@ -74,29 +94,29 @@ class FilmParser:
                 'director': self._extract_director(),
                 'actors': self._extract_actors(),
                 'description': self._extract_description(),
-                # LordFilm рейтинги
-                'lf_rating': self._extract_lf_rating(),
-                'lf_likes': self._extract_lf_likes(),
-                'lf_dislikes': self._extract_lf_dislikes(),
-                # Другие рейтинги
                 'kp_rating': self._extract_kp_rating(),
                 'imdb_rating': self._extract_imdb_rating(),
+                'lf_likes': self._extract_lf_likes(),
+                'lf_dislikes': self._extract_lf_dislikes(),
+                'lf_rating': self._extract_lf_rating(),
+                'parsed_at': datetime.now().isoformat()
             }
 
-            logger.info(f"✅ Успешно распарсены данные для: {film_data.get('title', 'Unknown')}")
+            logger.info(f"Parsed film: {film_data.get('title', 'Unknown')}")
             return film_data
 
         except TimeoutException:
-            logger.error(f"⏰ Таймаут загрузки страницы фильма: {film_url}")
-            return {'url': film_url, 'error': 'Timeout'}
+            logger.warning(f"Timeout loading film page: {film_url}")
+            return {'url': film_url, 'error': 'Timeout loading page'}
         except Exception as e:
-            logger.error(f"❌ Ошибка парсинга фильма {film_url}: {e}")
-            raise
+            logger.error(f"Error parsing film {film_url}: {e}")
+            return {'url': film_url, 'error': str(e)}
+
+    # --- Extraction methods ---
 
     def _extract_title(self) -> Optional[str]:
-        """Извлекает русское название фильма"""
+        """Extract Russian title"""
         try:
-            # Ищем в заголовке h1/h2
             selectors = ["h1", "h2", ".title", ".film-title"]
             for selector in selectors:
                 elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
@@ -109,9 +129,8 @@ class FilmParser:
             return None
 
     def _extract_original_title(self) -> Optional[str]:
-        """Извлекает оригинальное название"""
+        """Extract original title"""
         try:
-            # Ищем по паттерну "Оригинальное название:"
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             match = re.search(r'Оригинальное название[:\s]*([^\n]+)', body_text, re.IGNORECASE)
             return match.group(1).strip() if match else None
@@ -119,21 +138,20 @@ class FilmParser:
             return None
 
     def _extract_year(self) -> Optional[int]:
-        """Извлекает год выпуска"""
+        """Extract release year"""
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             match = re.search(r'Год выхода[:\s]*(\d{4})', body_text)
             if match:
                 return int(match.group(1))
 
-            # Альтернативный поиск
             match = re.search(r'Год[:\s]*(\d{4})', body_text, re.IGNORECASE)
             return int(match.group(1)) if match else None
         except:
             return None
 
     def _extract_country(self) -> Optional[str]:
-        """Извлекает страну производства"""
+        """Extract country"""
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             match = re.search(r'Страна[:\s]*([^\n]+)', body_text, re.IGNORECASE)
@@ -141,8 +159,8 @@ class FilmParser:
         except:
             return None
 
-    def _extract_categories(self) -> List[str]:
-        """Извлекает категории/жанры"""
+    def _extract_categories(self) -> list:
+        """Extract categories/genres"""
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             match = re.search(r'Категории?[:\s]*([^\n]+)', body_text, re.IGNORECASE)
@@ -154,7 +172,7 @@ class FilmParser:
             return []
 
     def _extract_director(self) -> Optional[str]:
-        """Извлекает режиссера"""
+        """Extract director"""
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
             match = re.search(r'Режиссер[:\s]*([^\n]+)', body_text, re.IGNORECASE)
@@ -162,12 +180,11 @@ class FilmParser:
         except:
             return None
 
-    def _extract_actors(self) -> List[str]:
-        """Извлекает список актеров"""
+    def _extract_actors(self) -> list:
+        """Extract actors list"""
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
 
-            # Ищем блок с актерами
             patterns = [
                 r'Актеры[:\s]*([^А-Я]{10,500})',
                 r'В ролях[:\s]*([^А-Я]{10,500})',
@@ -178,29 +195,28 @@ class FilmParser:
                 if match:
                     actors_text = match.group(1).strip()
                     actors = [actor.strip() for actor in re.split(r'[,\n]', actors_text) if len(actor.strip()) > 2]
-                    return actors[:15]  # Ограничиваем список
+                    return actors[:15]  # Limit list
 
             return []
         except:
             return []
 
     def _extract_description(self) -> Optional[str]:
-        """Извлекает описание сюжета"""
+        """Extract plot description"""
         try:
-            # Ищем блок с описанием
             selectors = [".description", ".plot", ".story", "p"]
             for selector in selectors:
                 elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
                 for element in elements:
                     text = element.text.strip()
-                    if len(text) > 100:  # Предполагаем что описание достаточно длинное
+                    if len(text) > 100:  # Assume description is long enough
                         return text
             return None
         except:
             return None
 
     def _extract_lf_likes(self) -> Optional[int]:
-        """Извлекает лайки LordFilm (надежный метод из второго скрипта)"""
+        """Extract LordFilm likes"""
         try:
             likes_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.rate-plus span.psc")
             if likes_elements:
@@ -209,11 +225,11 @@ class FilmParser:
                     return int(likes_text)
             return None
         except Exception as e:
-            logger.debug(f"Ошибка извлечения лайков: {e}")
+            logger.debug(f"Error extracting likes: {e}")
             return None
 
     def _extract_lf_dislikes(self) -> Optional[int]:
-        """Извлекает дизлайки LordFilm (надежный метод из второго скрипта)"""
+        """Extract LordFilm dislikes"""
         try:
             dislikes_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.rate-minus span.msc")
             if dislikes_elements:
@@ -222,11 +238,11 @@ class FilmParser:
                     return int(dislikes_text)
             return None
         except Exception as e:
-            logger.debug(f"Ошибка извлечения дизлайков: {e}")
+            logger.debug(f"Error extracting dislikes: {e}")
             return None
 
     def _extract_lf_rating(self) -> Optional[float]:
-        """Рассчитывает рейтинг LordFilm: (лайки / всего) * 10"""
+        """Calculate LordFilm rating: (likes / total) * 10"""
         likes = self._extract_lf_likes()
         dislikes = self._extract_lf_dislikes()
 
@@ -241,7 +257,7 @@ class FilmParser:
         return round(rating, 2)
 
     def _extract_kp_rating(self) -> Optional[float]:
-        """Извлекает рейтинг КиноПоиск (надежный метод из второго скрипта)"""
+        """Extract Kinopoisk rating"""
         try:
             kp_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.frate.frate-kp span")
             if kp_elements:
@@ -252,11 +268,11 @@ class FilmParser:
                     return None
             return None
         except Exception as e:
-            logger.debug(f"Ошибка извлечения KP рейтинга: {e}")
+            logger.debug(f"Error extracting KP rating: {e}")
             return None
 
     def _extract_imdb_rating(self) -> Optional[float]:
-        """Извлекает рейтинг IMDB (надежный метод из второго скрипта)"""
+        """Extract IMDB rating"""
         try:
             imdb_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.frate.frate-imdb span")
             if imdb_elements:
@@ -267,123 +283,17 @@ class FilmParser:
                     return None
             return None
         except Exception as e:
-            logger.debug(f"Ошибка извлечения IMDB рейтинга: {e}")
+            logger.debug(f"Error extracting IMDB rating: {e}")
             return None
 
-    def update_film_in_db(self, film_data: Dict[str, Any], session_id: int) -> bool:
-        """
-        Обновляет данные фильма в БД
-
-        Args:
-            film_data: Данные фильма
-            session_id: ID сессии парсинга
-
-        Returns:
-            True если успешно
-        """
-        session = db_manager.get_session()
-
-        try:
-            # Находим фильм по URL
-            film = session.query(Film).filter(Film.url == film_data['url']).first()
-
-            if not film:
-                logger.warning(f"⚠️ Фильм не найден в БД: {film_data['url']}")
-                return False
-
-            # Обновляем данные
-            film.title = film_data.get('title')
-            film.original_title = film_data.get('original_title')
-            film.year = film_data.get('year')
-            film.country = film_data.get('country')
-            film.categories = film_data.get('categories', [])
-            film.director = film_data.get('director')
-            film.actors = film_data.get('actors', [])
-            film.description = film_data.get('description')
-            film.lf_rating = film_data.get('lf_rating')
-            film.lf_likes = film_data.get('lf_likes')
-            film.lf_dislikes = film_data.get('lf_dislikes')
-            film.kp_rating = film_data.get('kp_rating')
-            film.imdb_rating = film_data.get('imdb_rating')
-            film.is_active = True  # Если фильм парсится - он активен
-
-            # Записываем в историю
-            history = ParsingHistory(
-                film_id=film.id,
-                session_id=session_id,
-                parsing_type="film_details",
-                success=True,
-                data_processed={"title": film_data.get('title')}
-            )
-            session.add(history)
-
-            session.commit()
-            logger.info(f"💾 Обновлены данные для: {film_data.get('title', 'Unknown')}")
-            return True
-
-        except Exception as e:
-            session.rollback()
-            logger.error(f"❌ Ошибка обновления фильма в БД: {e}")
-            return False
-        finally:
-            session.close()
-
-    def parse_films_batch(self, film_urls: List[str], session_id: int, batch_size: int = 10) -> dict:
-        """
-        Парсит пачку фильмов и обновляет данные в БД
-
-        Args:
-            film_urls: Список URL фильмов
-            session_id: ID сессии парсинга
-            batch_size: Размер пачки для обработки
-
-        Returns:
-            Статистика парсинга
-        """
-        stats = {
-            "films_processed": 0,
-            "films_updated": 0,
-            "errors": 0
-        }
-
-        current_batch = []
-
-        for i, film_url in enumerate(film_urls):
-            try:
-                # Парсим фильм
-                film_data = self.parse_film_details(film_url)
-                current_batch.append(film_data)
-
-                stats["films_processed"] += 1
-
-                logger.info(f"🎬 Обработан фильм {i + 1}/{len(film_urls)}: {film_data.get('title', 'Unknown')}")
-
-                # Обновляем пачку в БД
-                if len(current_batch) >= batch_size or i == len(film_urls) - 1:
-                    for film_data in current_batch:
-                        if 'error' not in film_data:
-                            success = self.update_film_in_db(film_data, session_id)
-                            if success:
-                                stats["films_updated"] += 1
-
-                    current_batch = []
-
-                    # Пауза между пачками
-                    time.sleep(2)
-
-            except Exception as e:
-                stats["errors"] += 1
-                logger.error(f"❌ Ошибка обработки фильма {film_url}: {e}")
-                continue
-
-        return stats
-
     def close(self):
-        """Закрывает WebDriver"""
+        """Close WebDriver"""
         if self.driver:
             self.driver.quit()
-            logger.info("🔚 WebDriver закрыт")
+            logger.info("Film parser WebDriver closed")
 
 
-# Синглтон экземпляр
-film_parser = FilmParser()
+# Factory function
+def create_film_parser(base_url: str = None) -> FilmParser:
+    """Create and return a new FilmParser instance"""
+    return FilmParser(base_url=base_url)

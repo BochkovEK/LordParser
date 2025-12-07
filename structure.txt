@@ -1,44 +1,67 @@
-🏗️ Финальная архитектура проекта:
-text
-movie_parser/
-├── docker-compose.yml
-├── .env
-├── requirements.txt
+Настройка чата:
+1) В чате общаемся на русском
+2) Отвечаем на вопросы коротко (потребуется раскрыть тему, я попрошу отдельно) и по существу
+3) любые конфиги и код пишем только после обсуждения и подтвреждения
+4) комменты для всех будущих скриптов и конфигов на англ. яз
+Подтверди если понял
+
+25_11_25
+lord_parser/
 ├── src/
-│   ├── __init__.py
-│   ├── main.py                 # Точка входа
 │   ├── config/
 │   │   ├── __init__.py
-│   │   ├── settings.py        # Настройки (URL, годы, страницы)
-│   │   └── scheduler.py       # Расписание (00:00 daily, 00:00 Sunday)
-│   ├── database/
-│   │   ├── __init__.py
-│   │   ├── models.py          # Модели БД (films, parsing_sessions)
-│   │   ├── connection.py
-│   │   └── operations.py      # CRUD операции
+│   │   ├── config.py              # Основные настройки
+│   │   └── schedules_conf.py      # Конфигурация расписаний
 │   ├── parser/
 │   │   ├── __init__.py
-│   │   ├── base_parser.py     # Базовый класс с кэшированием
-│   │   ├── link_parser.py     # Этап 1: сбор ссылок (пачки по 100)
-│   │   └── film_parser.py     # Этап 2: детали фильмов (пачки по 10)
-│   ├── scheduler/
+│   │   ├── url_generator.py       # Генератор URL
+│   │   ├── link_parser.py         # Парсер ссылок (обновленный)
+│   │   └── film_parser.py         # Парсер фильмов (обновленный)
+│   ├── database/
 │   │   ├── __init__.py
-│   │   ├── tasks.py           # Ежедневные/еженедельные задачи
-│   │   └── runner.py          # Запуск по расписанию
+│   │   ├── connection.py          # Подключение к БД
+│   │   └── models.py              # Модели SQLAlchemy
+│   ├── telegram/                  # Для будущего бота
+│   │   └── __init__.py
 │   ├── utils/
-│       ├── __init__.py
-│       ├── logger.py          # Логирование
-│       ├── retry.py           # Повторные попытки (2 попытки)
-│       └── cache.py           # In-memory кэш
+│   │   ├── __init__.py
+│   │   ├── retry.py              # Декоратор ретраев
+│   │   └── logger.py             # Настройка логгера
+│   └── main_parser.py            # 🆕 Основной оркестратор
+├── configs/                     # 🆕 Шаблоны конфигурации
+│   ├── .env.template
+│   └── parser-config.yaml.template
+├── tests/
+│   ├── test_url_generator.py     # Тест генератора
 ├── scripts/
-│   ├── init_db.py            # Инициализация БД
-│   └── test_parsing.py       # Тест парсинга
-└── logs/
-    ├── parser.log
-    └── scheduler.log
-⚙️ Конфигурация:
-config/settings.py:
+│   └── main_runner.py            # CLI для systemd
+├── systemd/
+│   ├── lordfilm-parser.service
+│   ├── lordfilm-parser.timer
+│   └── lordfilm-bot.service
+└── requirements.txt
 
+Timer (только время)
+    ↓ вызывает
+Service (контекст: пользователь, переменные, зависимости)
+    ↓ запускает
+Python скрипт (в правильном окружении)
+
+main_parser.py	Шеф-повар на кухне	Знает КАК готовить блюда, какие ингредиенты, в какой последовательности
+main_runner.py	Официант/менеджер	Принимает заказы (аргументы), передает на кухню, контролирует время, сообщает клиенту о готовности
+systemd service	Расписание работы ресторана	Определяет КОГДА кухня работает (3:00 daily, 4:00 weekly)
+
+# Systemd timer запускает:
+python main_runner.py --auto
+
+# Последовательность:
+1. Auto-detect (Sunday → weekly, другие дни → daily)
+2. Health checks (БД + сайт через Selenium)
+3. Если checks fail и нет --force → exit code 2 (CONFIG_ERROR)
+4. Выполнение задач (daily: 2 задачи, weekly: 1 задача)
+5. Return exit code для systemd
+
+=========================
 python
 # Парсинг
 DEFAULT_URL = "https://wk.lordfilm17.ru"
@@ -276,6 +299,12 @@ python
 
 Быстрый поиск новинок по паттерну
 https://nc.lordfilm17.ru/filmy/page/1/.../page/N/ (на глубину 50 - из конфига)
+
+scheduler.py (КОГДА)
+    ↓ вызывает
+main_parser.py (ЧТО и КАК)
+    ↓ использует
+url_generator.py, link_parser.py, film_parser.py (ИНСТРУМЕНТЫ)
 
 Тестирование url_generator.py
 

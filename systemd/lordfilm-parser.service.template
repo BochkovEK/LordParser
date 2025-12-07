@@ -1,0 +1,19 @@
+# systemd/lordfilm-parser.service.template
+[Unit]
+Description=LordFilm Parser Service (auto-detect daily/weekly)
+
+[Service]
+Type=oneshot
+User={{USER}}
+Group={{GROUP}}
+WorkingDirectory={{PROJECT_DIR}}
+EnvironmentFile={{CONFIG_DIR}}/.env
+
+ExecStart={{PYTHON_PATH}} {{PROJECT_DIR}}/scripts/main_runner.py --auto
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lordfilm-parser
+
+[Install]
+WantedBy=multi-user.target
