@@ -9,5 +9,5 @@
 /tmp/
 .env
 *.env.local
-/systemd/tmp/
-/tests/tmp/
+/systemd/tmp/*
+/tests/tmp/*
