@@ -71,8 +71,8 @@ def load_config(config_path: str = None) -> configparser.ConfigParser:
         },
         'logging': {
             'level': 'INFO',
-            'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            'date_format': '%Y-%m-%d %H:%M:%S',
+            'format': '%%(asctime)s - %%(name)s - %%(levelname)s - %%(message)s',
+            'date_format': 'Y-m-d H:M:S',
         },
         'schedules': {
             'daily_pages': '50',
