@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script for URL Generator module
-Updated based on actual URLGenerator implementation
+Tests actual URLGenerator implementation with its real templates
 """
 
 import sys
@@ -21,163 +21,168 @@ def test_generator_initialization():
         generator = URLGenerator()
         assert generator is not None
         print("✅ URLGenerator initialized successfully")
+
+        # Check attributes from config
+        print(f"   base_url: {generator.base_url}")
+        print(f"   category: {generator.category}")
+        print(f"   year range: {generator.start_year}-{generator.end_year}")
+        print(f"   default_pages: {generator.default_pages}")
+
         return True
     except Exception as e:
         print(f"❌ URLGenerator initialization failed: {e}")
         return False
 
 
-def test_generator_methods():
-    """Test available methods of URLGenerator"""
-    print("\n🧪 Testing URLGenerator methods")
+def test_main_catalog_generation():
+    """Test main catalog URL generation"""
+    print("\n🧪 Testing main catalog generation")
 
     try:
         generator = URLGenerator()
 
-        # Check what methods are available
-        methods = [method for method in dir(generator) if not method.startswith('_')]
-        print(f"✅ Available methods: {', '.join(methods)}")
+        # Test with 2 pages
+        urls = list(generator.generate_from_template(
+            template_key='main_catalog',
+            pages=2
+        ))
 
-        # Check for key methods
-        if 'generate_from_template' in methods:
-            print("✅ Has generate_from_template method")
-        else:
-            print("❌ Missing generate_from_template method")
-            return False
+        assert len(urls) == 2, f"Expected 2 URLs, got {len(urls)}"
+
+        print(f"✅ Generated {len(urls)} main catalog URLs")
+
+        # Check URL format
+        for i, url in enumerate(urls, 1):
+            assert url.startswith(generator.base_url), f"URL doesn't start with base_url: {url}"
+            assert f"/page/{i}/" in url, f"Page number incorrect in URL: {url}"
+            print(f"   {i}. {url}")
 
         return True
     except Exception as e:
-        print(f"❌ Methods test failed: {e}")
+        print(f"❌ Main catalog generation failed: {e}")
         return False
 
 
-def test_generator_attributes():
-    """Test attributes of URLGenerator"""
-    print("\n🧪 Testing URLGenerator attributes")
+def test_yearly_catalog_generation():
+    """Test yearly catalog URL generation"""
+    print("\n🧪 Testing yearly catalog generation")
 
     try:
         generator = URLGenerator()
 
-        # Check what attributes are available
-        attrs = [attr for attr in dir(generator)
-                 if not attr.startswith('_') and not callable(getattr(generator, attr))]
+        # Test with specific years
+        test_years = [2023, 2024]
+        urls = list(generator.generate_from_template(
+            template_key='yearly_catalog',
+            pages=2,
+            years=test_years
+        ))
 
-        print(f"✅ Available attributes: {', '.join(attrs) if attrs else 'None'}")
+        expected_count = len(test_years) * 2  # 2 pages per year
+        assert len(urls) == expected_count, f"Expected {expected_count} URLs, got {len(urls)}"
 
-        # Look for config-related attributes
-        config_attrs = ['default_url', 'default_category', 'base_url', 'url']
-        found = []
+        print(f"✅ Generated {len(urls)} yearly catalog URLs for years {test_years}")
 
-        for attr in config_attrs:
-            if hasattr(generator, attr):
-                value = getattr(generator, attr)
-                print(f"✅ {attr}: {value}")
-                found.append(attr)
+        # Check each URL contains correct year and page
+        url_index = 0
+        for year in test_years:
+            for page in [1, 2]:
+                url = urls[url_index]
+                assert str(year) in url, f"Year {year} not in URL: {url}"
+                assert f"/page/{page}/" in url, f"Page {page} not in URL: {url}"
+                url_index += 1
 
-        if found:
-            print(f"✅ Found config attributes: {', '.join(found)}")
-            return True
-        else:
-            print("⚠️ No config attributes found (check URLGenerator implementation)")
-            return True  # Not critical
-
-    except Exception as e:
-        print(f"❌ Attributes test failed: {e}")
-        return False
-
-
-def test_actual_templates():
-    """Test with actual templates from URLGenerator"""
-    print("\n🧪 Testing actual templates")
-
-    try:
-        generator = URLGenerator()
-
-        # Try to discover available templates
-        templates_to_try = [
-            'films', 'movies', 'latest', 'new',
-            'by_year', 'by_category', 'catalog'
-        ]
-
-        successful_templates = []
-
-        for template in templates_to_try:
-            try:
-                # Try to generate URLs with this template
-                urls = list(generator.generate_from_template(
-                    template_key=template,
-                    pages=1
-                ))
-
-                if urls:
-                    print(f"✅ Template '{template}': Generated {len(urls)} URLs")
-                    successful_templates.append(template)
-
-                    # Show first URL
-                    if urls:
-                        print(f"   Example: {urls[0][:80]}...")
-                else:
-                    print(f"⚠️ Template '{template}': No URLs generated")
-
-            except Exception as e:
-                # Template doesn't exist or error
-                pass
-
-        if successful_templates:
-            print(f"✅ Working templates: {', '.join(successful_templates)}")
-            return True
-        else:
-            print("⚠️ No working templates found")
-            return True  # Not critical
-
-    except Exception as e:
-        print(f"❌ Template test failed: {e}")
-        return False
-
-
-def test_generation_with_pages():
-    """Test URL generation with different page counts"""
-    print("\n🧪 Testing generation with pages")
-
-    try:
-        generator = URLGenerator()
-
-        # First find a working template
-        test_template = None
-        test_templates = ['films', 'movies', 'latest', 'catalog']
-
-        for template in test_templates:
-            try:
-                urls = list(generator.generate_from_template(
-                    template_key=template,
-                    pages=1
-                ))
-                if urls:
-                    test_template = template
-                    break
-            except:
-                continue
-
-        if not test_template:
-            print("⚠️ No working template found for page test")
-            return True  # Not critical
-
-        print(f"✅ Using template: {test_template}")
-
-        # Test different page counts
-        for pages in [1, 2, 3]:
-            try:
-                urls = list(generator.generate_from_template(
-                    template_key=test_template,
-                    pages=pages
-                ))
-                print(f"✅ Pages={pages}: Generated {len(urls)} URLs")
-            except Exception as e:
-                print(f"❌ Pages={pages}: Failed - {e}")
+        # Show sample URLs
+        print("   Sample URLs:")
+        for i, url in enumerate(urls[:3], 1):
+            print(f"   {i}. {url}")
+        if len(urls) > 3:
+            print(f"   ... and {len(urls) - 3} more")
 
         return True
     except Exception as e:
-        print(f"❌ Page test failed: {e}")
+        print(f"❌ Yearly catalog generation failed: {e}")
+        return False
+
+
+def test_invalid_template():
+    """Test error handling for invalid template"""
+    print("\n🧪 Testing invalid template handling")
+
+    try:
+        generator = URLGenerator()
+
+        # This should raise ValueError
+        urls = list(generator.generate_from_template(
+            template_key='invalid_template',
+            pages=1
+        ))
+
+        print("❌ Should have raised ValueError for invalid template")
+        return False
+    except ValueError as e:
+        print(f"✅ Correctly raised ValueError: {e}")
+        return True
+    except Exception as e:
+        print(f"❌ Wrong exception type: {type(e).__name__}: {e}")
+        return False
+
+
+def test_pages_all_keyword():
+    """Test 'all' keyword for pages parameter"""
+    print("\n🧪 Testing 'all' pages keyword")
+
+    try:
+        generator = URLGenerator()
+
+        # Should use default_pages when pages='all'
+        urls = list(generator.generate_from_template(
+            template_key='main_catalog',
+            pages='all'
+        ))
+
+        assert len(urls) == generator.default_pages, \
+            f"Expected {generator.default_pages} URLs for 'all', got {len(urls)}"
+
+        print(f"✅ 'all' keyword generated {len(urls)} URLs (default_pages)")
+
+        # Verify page numbers
+        for i, url in enumerate(urls, 1):
+            assert f"/page/{i}/" in url, f"Page {i} not in URL: {url}"
+
+        return True
+    except Exception as e:
+        print(f"❌ 'all' keyword test failed: {e}")
+        return False
+
+
+def test_default_years():
+    """Test yearly catalog with default years (from config)"""
+    print("\n🧪 Testing default years generation")
+
+    try:
+        generator = URLGenerator()
+
+        # Should use YEAR_RANGE from config when years=None
+        urls = list(generator.generate_from_template(
+            template_key='yearly_catalog',
+            pages=1
+        ))
+
+        expected_years = generator.end_year - generator.start_year + 1
+        assert len(urls) == expected_years, \
+            f"Expected {expected_years} URLs for default years, got {len(urls)}"
+
+        print(f"✅ Generated {len(urls)} URLs for default years {generator.start_year}-{generator.end_year}")
+
+        # Verify each year appears
+        for year in range(generator.start_year, generator.end_year + 1):
+            year_found = any(str(year) in url for url in urls)
+            assert year_found, f"Year {year} not found in generated URLs"
+
+        return True
+    except Exception as e:
+        print(f"❌ Default years test failed: {e}")
         return False
 
 
@@ -188,10 +193,11 @@ def main():
 
     tests = [
         ("Initialization", test_generator_initialization),
-        ("Methods", test_generator_methods),
-        ("Attributes", test_generator_attributes),
-        ("Actual templates", test_actual_templates),
-        ("Page generation", test_generation_with_pages),
+        ("Main catalog", test_main_catalog_generation),
+        ("Yearly catalog", test_yearly_catalog_generation),
+        ("Invalid template", test_invalid_template),
+        ("'all' pages keyword", test_pages_all_keyword),
+        ("Default years", test_default_years),
     ]
 
     passed = 0
@@ -210,8 +216,11 @@ def main():
     print("=" * 50)
     print(f"📊 Test Results: {passed}/{total} passed")
 
-    if passed >= 3:
-        print("✅ URL Generator basic functionality working")
+    if passed == total:
+        print("🎉 All URL Generator tests passed!")
+        return 0
+    elif passed >= 4:
+        print("✅ URL Generator working correctly")
         return 0
     else:
         print("⚠️ URL Generator has issues")
