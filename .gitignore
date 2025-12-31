@@ -11,3 +11,6 @@
 *.env.local
 /systemd/tmp/*
 /tests/tmp/*
+/src/parser/tmp/
+/scripts/tmp/
+/tests/tmp/
