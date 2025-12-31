@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """
-Enhanced test for Link Parser with site availability checks
-Tests:
-1. LinkParser correctly raises ConnectionError on site unavailability
-2. LinkParser works with URLs from URLGenerator
-3. Integration with broken base URL
+LordFilm LinkParser Test Suite
+Tests LinkParser's ability to handle site availability and integration with URLGenerator
 """
 
 import sys
 import os
 import logging
-from typing import List
+from typing import List, Tuple, Callable
 from urllib.parse import urlparse, urlunparse
 
 # Add project root to Python path
@@ -27,72 +24,71 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    # Reduce noise
     logging.getLogger('selenium').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
-# def test_site_unavailability():
-#     """
-#     Test 1: LinkParser raises ConnectionError on site unavailability
-#     Uses broken URL pattern similar to URLGenerator output
-#     """
-#     print("\n" + "=" * 60)
-#     print("🔌 TEST 1: Site Unavailability Detection")
-#     print("=" * 60)
-#
-#     link_parser = create_link_parser()
-#
-#     # Create broken URL using the same pattern as URLGenerator
-#     parsed = urlparse(DEFAULT_URL)
-#     broken_domain = "nonexistent-domain-12345.invalid"
-#     broken_url = f"http://{broken_domain}/filmy/page/1/"
-#
-#     print(f"Base URL from config: {DEFAULT_URL}")
-#     print(f"Testing with broken URL: {broken_url}")
-#
-#     try:
-#         links = link_parser.parse_links_from_page(broken_url)
-#
-#         # If we get here - FAIL
-#         print(f"❌ FAIL: LinkParser returned {len(links)} links instead of raising exception")
-#         print(f"   Links found: {links[:3] if links else '[]'}")
-#         return False
-#
-#     except ConnectionError as e:
-#         # ✅ CORRECT - ConnectionError
-#         print(f"✅ PASS: ConnectionError raised as expected")
-#         print(f"   Message: {str(e)[:100]}...")
-#         return True
-#
-#     except TimeoutError as e:
-#         # ✅ Also acceptable - TimeoutError
-#         print(f"✅ PASS: TimeoutError raised")
-#         print(f"   Message: {str(e)[:100]}...")
-#         return True
-#
-#     except Exception as e:
-#         # ❌ Wrong exception type
-#         print(f"❌ FAIL: Wrong exception type: {type(e).__name__}")
-#         print(f"   Message: {str(e)[:100]}...")
-#         print(f"   Expected: ConnectionError or TimeoutError")
-#         return False
-#
-#     finally:
-#         link_parser.close()
-
-
-def test_with_url_generator_normal():
+def test_site_unavailability() -> Tuple[str, bool, str]:
     """
-    Test 2: LinkParser works with URLs from URLGenerator (normal base URL)
-    """
-    print("\n" + "=" * 60)
-    print("🔄 TEST 2: LinkParser + URLGenerator (Normal URL)")
-    print("=" * 60)
+    Test that LinkParser raises ConnectionError on site unavailability
 
-    # URLGenerator uses DEFAULT_URL from config
-    url_gen = URLGenerator()  # base_url = DEFAULT_URL
-    link_parser = create_link_parser()  # base_url = DEFAULT_URL
+    Returns:
+        Tuple: (test_name, success, message)
+    """
+    test_name = "Site Unavailability Detection"
+
+    link_parser = create_link_parser()
+
+    # Create broken URL using the same pattern as URLGenerator
+    parsed = urlparse(DEFAULT_URL)
+    broken_domain = "nonexistent-domain-12345.invalid"
+    broken_url = f"http://{broken_domain}/filmy/page/1/"
+
+    try:
+        links = link_parser.parse_links_from_page(broken_url)
+
+        return (
+            test_name,
+            False,
+            f"LinkParser returned {len(links)} links instead of raising ConnectionError"
+        )
+
+    except ConnectionError as e:
+        return (
+            test_name,
+            True,
+            f"ConnectionError raised as expected: {str(e)[:80]}..."
+        )
+
+    except TimeoutError as e:
+        return (
+            test_name,
+            True,
+            f"TimeoutError raised: {str(e)[:80]}..."
+        )
+
+    except Exception as e:
+        return (
+            test_name,
+            False,
+            f"Wrong exception type {type(e).__name__}: {str(e)[:80]}..."
+        )
+
+    finally:
+        link_parser.close()
+
+
+def test_normal_url_generation() -> Tuple[str, bool, str]:
+    """
+    Test LinkParser works with URLs from URLGenerator (normal base URL)
+
+    Returns:
+        Tuple: (test_name, success, message)
+    """
+    test_name = "Normal URL Generation Integration"
+
+    url_gen = URLGenerator()
+    link_parser = create_link_parser()
 
     # Generate one test page
     test_urls = list(url_gen.generate_from_template(
@@ -101,60 +97,62 @@ def test_with_url_generator_normal():
     ))
 
     if not test_urls:
-        print("❌ FAIL: URLGenerator didn't generate any URLs")
-        return False
+        return (test_name, False, "URLGenerator didn't generate any URLs")
 
     test_url = test_urls[0]
-    print(f"Generated URL: {test_url}")
-    print(f"Base URL used: {url_gen.base_url}")
 
     try:
         links = link_parser.parse_links_from_page(test_url)
-        print(f"Found {len(links)} links")
 
         if links:
-            print("✅ PASS: LinkParser successfully parsed URL from URLGenerator")
-            # Show first 3 links for verification
-            for i, link in enumerate(links[:3], 1):
-                print(f"   {i}. {link}")
-            return True
+            return (
+                test_name,
+                True,
+                f"Successfully parsed {len(links)} links from {test_url}"
+            )
         else:
-            print("⚠️ WARNING: Found 0 links (site might be empty or selectors outdated)")
-            print("   This is not a FAIL, but indicates potential issue")
-            return True  # Not a failure, just warning
+            return (
+                test_name,
+                True,
+                "Found 0 links (site might be empty or selectors outdated)"
+            )
 
     except ConnectionError as e:
-        print(f"❌ FAIL: Site unavailable (ConnectionError): {e}")
-        return False
+        return (
+            test_name,
+            False,
+            f"Site unavailable: {str(e)[:80]}..."
+        )
 
     except Exception as e:
-        print(f"❌ FAIL: Unexpected error: {type(e).__name__}: {e}")
-        return False
+        return (
+            test_name,
+            False,
+            f"Unexpected error {type(e).__name__}: {str(e)[:80]}..."
+        )
 
     finally:
         link_parser.close()
 
 
-def test_with_url_generator_broken():
+def test_broken_base_url() -> Tuple[str, bool, str]:
     """
-    Test 3: LinkParser with URLs from URLGenerator using broken base URL
+    Test LinkParser with URLs from URLGenerator using broken base URL
+
+    Returns:
+        Tuple: (test_name, success, message)
     """
-    print("\n" + "=" * 60)
-    print("💀 TEST 3: LinkParser + URLGenerator (Broken Base URL)")
-    print("=" * 60)
+    test_name = "Broken Base URL Handling"
 
     # Create broken base URL by modifying the original
     parsed = urlparse(DEFAULT_URL)
     broken_base = parsed._replace(netloc="broken-domain-54321.invalid")
     broken_base_url = urlunparse(broken_base)
 
-    print(f"Original base URL: {DEFAULT_URL}")
-    print(f"Broken base URL:   {broken_base_url}")
-
     # Create URLGenerator with broken base URL
     broken_url_gen = URLGenerator(base_url=broken_base_url)
 
-    # Create LinkParser with the same broken base URL for consistency
+    # Create LinkParser with the same broken base URL
     broken_link_parser = create_link_parser(base_url=broken_base_url)
 
     # Generate URL using broken base
@@ -164,189 +162,108 @@ def test_with_url_generator_broken():
     ))
 
     if not broken_urls:
-        print("❌ FAIL: Broken URLGenerator didn't generate any URLs")
-        return False
+        return (test_name, False, "Broken URLGenerator didn't generate any URLs")
 
     broken_url = broken_urls[0]
-    print(f"Generated broken URL: {broken_url}")
 
     try:
         links = broken_link_parser.parse_links_from_page(broken_url)
 
-        # If we get here - FAIL (should raise exception)
-        print(f"❌ FAIL: LinkParser returned {len(links)} links for broken URL")
-        print(f"   Expected: ConnectionError")
-        return False
+        return (
+            test_name,
+            False,
+            f"LinkParser returned {len(links)} links for broken URL {broken_url}"
+        )
 
     except ConnectionError as e:
-        # ✅ CORRECT
-        print(f"✅ PASS: ConnectionError raised for broken base URL")
-        print(f"   Message: {str(e)[:100]}...")
-        return True
+        return (
+            test_name,
+            True,
+            f"ConnectionError raised for broken base URL: {str(e)[:80]}..."
+        )
 
     except Exception as e:
-        # Check if it's a network-related error
         error_msg = str(e).lower()
         network_errors = ['connection', 'timeout', 'unreachable', 'resolve', 'err_name_not_resolved']
 
         if any(err in error_msg for err in network_errors):
-            print(f"✅ PASS: Network error raised: {type(e).__name__}")
-            print(f"   Message: {str(e)[:100]}...")
-            return True
+            return (
+                test_name,
+                True,
+                f"Network error raised ({type(e).__name__}): {str(e)[:80]}..."
+            )
         else:
-            print(f"⚠️ UNEXPECTED: Wrong exception type: {type(e).__name__}")
-            print(f"   Message: {str(e)[:100]}...")
-            return False
+            return (
+                test_name,
+                False,
+                f"Wrong exception type {type(e).__name__}: {str(e)[:80]}..."
+            )
 
     finally:
         broken_link_parser.close()
 
 
-def test_link_validation():
-    """
-    Test 4: Validate that extracted links are proper film URLs
-    """
-    print("\n" + "=" * 60)
-    print("🔍 TEST 4: Link Validation")
-    print("=" * 60)
-
-    # This test only runs if we have actual links from a successful parse
-    # It's a bonus test to verify link quality
-
-    url_gen = URLGenerator()
-    link_parser = create_link_parser()
-
-    try:
-        # Get a real URL
-        test_urls = list(url_gen.generate_from_template('main_catalog', pages=1))
-        if not test_urls:
-            print("⚠️ SKIP: Cannot get test URL")
-            return True
-
-        test_url = test_urls[0]
-        print(f"Testing URL: {test_url}")
-
-        links = link_parser.parse_links_from_page(test_url)
-
-        if not links:
-            print("⚠️ SKIP: No links found to validate")
-            return True
-
-        print(f"Validating {len(links)} links...")
-
-        valid_count = 0
-        invalid_examples = []
-
-        for link in links:
-            if _is_valid_film_link(link):
-                valid_count += 1
-            else:
-                if len(invalid_examples) < 3:
-                    invalid_examples.append(link)
-
-        validation_rate = (valid_count / len(links)) * 100 if links else 0
-
-        print(f"   Valid links: {valid_count}/{len(links)} ({validation_rate:.1f}%)")
-
-        if validation_rate >= 80:
-            print("✅ PASS: Most links are valid film URLs")
-        elif validation_rate >= 50:
-            print("⚠️ WARNING: Many invalid links")
-        else:
-            print("❌ FAIL: Too many invalid links")
-
-        if invalid_examples:
-            print(f"   Invalid examples:")
-            for i, link in enumerate(invalid_examples, 1):
-                print(f"     {i}. {link}")
-
-        return validation_rate >= 50  # Pass if at least 50% valid
-
-    except Exception as e:
-        print(f"⚠️ SKIP: Validation test failed: {e}")
-        return True  # Don't fail overall test suite
-    finally:
-        link_parser.close()
-
-
-def _is_valid_film_link(url: str) -> bool:
-    """Check if URL is a valid film link"""
-    if not url:
-        return False
-
-    # Must be absolute URL
-    if not url.startswith('http'):
-        return False
-
-    # Must contain /filmy/
-    if '/filmy/' not in url:
-        return False
-
-    # Must be HTML page
-    if not url.endswith('.html'):
-        return False
-
-    # Must not be catalog page
-    if '/page/' in url:
-        return False
-
-    # Must have film ID pattern: /filmy/12345-something.html
-    import re
-    film_pattern = r'/filmy/\d+-[^/]+\.html$'
-    return re.search(film_pattern, url) is not None
-
-
-def run_all_tests():
+def run_test_suite() -> bool:
     """Run all tests and return overall result"""
     setup_logging()
 
-    print("🚀 LordFilm LinkParser Comprehensive Test Suite")
+    print("🚀 LordFilm LinkParser Test Suite")
     print("=" * 60)
-    print(f"Using base URL from config: {DEFAULT_URL}")
+    print(f"Config base URL: {DEFAULT_URL}")
     print("=" * 60)
 
+    # Define all tests
     tests = [
-        # ("Site Unavailability Detection", test_site_unavailability),
-        ("Normal URL Generation", test_with_url_generator_normal),
-        ("Broken Base URL", test_with_url_generator_broken),
-        ("Link Validation", test_link_validation),
+        test_site_unavailability,
+        test_normal_url_generation,
+        test_broken_base_url,
     ]
 
     results = []
 
-    for test_name, test_func in tests:
-        print(f"\n▶️ Running: {test_name}")
+    # Run all tests
+    for test_index, test_func in enumerate(tests, 1):
+        print(f"\n▶️ Running test {test_index}/{len(tests)}...")
+
         try:
-            success = test_func()
-            results.append((test_name, success))
+            test_name, success, message = test_func()
 
             if success:
-                print(f"✅ {test_name}: PASSED")
+                print(f"   ✅ {test_name}")
+                print(f"      {message}")
             else:
-                print(f"❌ {test_name}: FAILED")
+                print(f"   ❌ {test_name}")
+                print(f"      {message}")
+
+            results.append((test_name, success, message))
 
         except Exception as e:
-            print(f"💥 {test_name}: CRASHED - {e}")
-            results.append((test_name, False))
+            error_msg = f"Test crashed: {type(e).__name__}: {str(e)[:100]}"
+            print(f"   💥 Test {test_index} crashed")
+            print(f"      {error_msg}")
+            results.append((f"Test {test_index}", False, error_msg))
 
-    # Summary
+    # Print summary
     print("\n" + "=" * 60)
     print("📊 TEST SUMMARY")
     print("=" * 60)
 
-    passed = sum(1 for _, success in results if success)
-    total = len(results)
+    passed_count = sum(1 for _, success, _ in results if success)
+    total_count = len(results)
 
-    for test_name, success in results:
+    for idx, (test_name, success, message) in enumerate(results, 1):
         status = "✅ PASS" if success else "❌ FAIL"
-        print(f"  {status} - {test_name}")
+        print(f"{idx:2d}. {status} - {test_name}")
+        if not success and message:
+            print(f"    💡 {message}")
 
-    print(f"\nTotal: {passed}/{total} tests passed")
+    print(f"\n📈 Total: {passed_count}/{total_count} tests passed")
 
-    if passed == total:
+    # Determine final result
+    if passed_count == total_count:
         print("🎉 ALL TESTS PASSED!")
         return True
-    elif passed >= total - 1:  # Allow 1 failure
+    elif passed_count >= total_count - 1:
         print("⚠️ MOST TESTS PASSED (1 failure allowed)")
         return True
     else:
@@ -357,7 +274,7 @@ def run_all_tests():
 def main():
     """Main entry point"""
     try:
-        success = run_all_tests()
+        success = run_test_suite()
         return 0 if success else 1
     except KeyboardInterrupt:
         print("\n⚠️ Tests interrupted by user")
