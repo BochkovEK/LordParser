@@ -61,6 +61,12 @@ python main_runner.py --auto
 4. Выполнение задач (daily: 2 задачи, weekly: 1 задача)
 5. Return exit code для systemd
 
+systemd timer → main_runner.py --auto → health checks → main_parser.main() → LinkParser
+                                                                                 ↓
+                                                                           (ретраи внутри)
+                                                                                 ↓
+                                                                     SiteUnavailableError → main_parser обрабатывает
+
 =========================
 python
 # Парсинг
