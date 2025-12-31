@@ -45,7 +45,7 @@ def load_config(config_path: str = None) -> configparser.ConfigParser:
             'bot_token': '',
         },
         'parser': {
-            'default_url': 'https://wk.lordfilm17.ru',
+            'default_url': 'https://sr.lordfilm17.ru',
             'default_category': 'filmy',
             'year_start': '2016',
             'year_end': '2025',
