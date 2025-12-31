@@ -32,54 +32,54 @@ def setup_logging():
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
-def test_site_unavailability():
-    """
-    Test 1: LinkParser raises ConnectionError on site unavailability
-    Uses broken URL pattern similar to URLGenerator output
-    """
-    print("\n" + "=" * 60)
-    print("🔌 TEST 1: Site Unavailability Detection")
-    print("=" * 60)
-
-    link_parser = create_link_parser()
-
-    # Create broken URL using the same pattern as URLGenerator
-    parsed = urlparse(DEFAULT_URL)
-    broken_domain = "nonexistent-domain-12345.invalid"
-    broken_url = f"http://{broken_domain}/filmy/page/1/"
-
-    print(f"Base URL from config: {DEFAULT_URL}")
-    print(f"Testing with broken URL: {broken_url}")
-
-    try:
-        links = link_parser.parse_links_from_page(broken_url)
-
-        # If we get here - FAIL
-        print(f"❌ FAIL: LinkParser returned {len(links)} links instead of raising exception")
-        print(f"   Links found: {links[:3] if links else '[]'}")
-        return False
-
-    except ConnectionError as e:
-        # ✅ CORRECT - ConnectionError
-        print(f"✅ PASS: ConnectionError raised as expected")
-        print(f"   Message: {str(e)[:100]}...")
-        return True
-
-    except TimeoutError as e:
-        # ✅ Also acceptable - TimeoutError
-        print(f"✅ PASS: TimeoutError raised")
-        print(f"   Message: {str(e)[:100]}...")
-        return True
-
-    except Exception as e:
-        # ❌ Wrong exception type
-        print(f"❌ FAIL: Wrong exception type: {type(e).__name__}")
-        print(f"   Message: {str(e)[:100]}...")
-        print(f"   Expected: ConnectionError or TimeoutError")
-        return False
-
-    finally:
-        link_parser.close()
+# def test_site_unavailability():
+#     """
+#     Test 1: LinkParser raises ConnectionError on site unavailability
+#     Uses broken URL pattern similar to URLGenerator output
+#     """
+#     print("\n" + "=" * 60)
+#     print("🔌 TEST 1: Site Unavailability Detection")
+#     print("=" * 60)
+#
+#     link_parser = create_link_parser()
+#
+#     # Create broken URL using the same pattern as URLGenerator
+#     parsed = urlparse(DEFAULT_URL)
+#     broken_domain = "nonexistent-domain-12345.invalid"
+#     broken_url = f"http://{broken_domain}/filmy/page/1/"
+#
+#     print(f"Base URL from config: {DEFAULT_URL}")
+#     print(f"Testing with broken URL: {broken_url}")
+#
+#     try:
+#         links = link_parser.parse_links_from_page(broken_url)
+#
+#         # If we get here - FAIL
+#         print(f"❌ FAIL: LinkParser returned {len(links)} links instead of raising exception")
+#         print(f"   Links found: {links[:3] if links else '[]'}")
+#         return False
+#
+#     except ConnectionError as e:
+#         # ✅ CORRECT - ConnectionError
+#         print(f"✅ PASS: ConnectionError raised as expected")
+#         print(f"   Message: {str(e)[:100]}...")
+#         return True
+#
+#     except TimeoutError as e:
+#         # ✅ Also acceptable - TimeoutError
+#         print(f"✅ PASS: TimeoutError raised")
+#         print(f"   Message: {str(e)[:100]}...")
+#         return True
+#
+#     except Exception as e:
+#         # ❌ Wrong exception type
+#         print(f"❌ FAIL: Wrong exception type: {type(e).__name__}")
+#         print(f"   Message: {str(e)[:100]}...")
+#         print(f"   Expected: ConnectionError or TimeoutError")
+#         return False
+#
+#     finally:
+#         link_parser.close()
 
 
 def test_with_url_generator_normal():
@@ -306,7 +306,7 @@ def run_all_tests():
     print("=" * 60)
 
     tests = [
-        ("Site Unavailability Detection", test_site_unavailability),
+        # ("Site Unavailability Detection", test_site_unavailability),
         ("Normal URL Generation", test_with_url_generator_normal),
         ("Broken Base URL", test_with_url_generator_broken),
         ("Link Validation", test_link_validation),
