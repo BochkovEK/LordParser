@@ -10,8 +10,8 @@ from src.config.config import DEFAULT_URL, DEFAULT_CATEGORY, YEAR_RANGE, PARSE_P
 class URLGenerator:
     """Generates URLs for parsing catalog pages"""
 
-    def __init__(self):
-        self.base_url = DEFAULT_URL
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or DEFAULT_URL
         self.category = DEFAULT_CATEGORY
         self.start_year, self.end_year = YEAR_RANGE
         self.default_pages = PARSE_PAGES

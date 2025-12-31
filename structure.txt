@@ -67,6 +67,8 @@ systemd timer → main_runner.py --auto → health checks → main_parser.main()
                                                                                  ↓
                                                                      SiteUnavailableError → main_parser обрабатывает
 
+systemd timer → main_runner.py → main_parser.py → URLGenerator → LinkParser
+
 =========================
 python
 # Парсинг
