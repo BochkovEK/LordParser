@@ -190,31 +190,16 @@ class MainParser:
         """Check system health before starting"""
         checks = []
 
-        # 1. Проверка БД
-        # try:
-        #     session = db_manager.get_session()
-        #     session.execute(text('SELECT 1'))
-        #     session.close()
-        #     checks.append(("database", True))
-        #     logger.debug("✅ Database connection: OK")
-        # except Exception as e:
-        #     checks.append(("database", False))
-        #     logger.error(f"❌ Database connection failed: {e}")
-        # try:
-        #     session.query(Film).limit(1).first()  # Пробуем прочитать что-то
-        #     checks.append(("database", True))
-        # except:
-        #     checks.append(("database", False))
+        # 1. Проверка БД через DatabaseManager
         try:
-            session = db_manager.get_session()
-            logger.info(f"Testing DB connection to {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
-            logger.info(f"DB user: {DB_CONFIG['user']}")
-
-            session.close()
-            checks.append(("database", True))
+            if db_manager.test_connection():
+                checks.append(("database", True))
+                logger.debug("✅ Database connection: OK")
+            else:
+                checks.append(("database", False))
+                logger.error("❌ Database connection failed")
         except Exception as e:
-            logger.error(f"DB connection error: {type(e).__name__}")
-            logger.error(f"Error details: {str(e)}")
+            logger.error(f"❌ Database connection check error: {e}")
             checks.append(("database", False))
 
         # 2. Проверка парсеров
