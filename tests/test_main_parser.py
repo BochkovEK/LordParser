@@ -14,7 +14,8 @@ from typing import List, Tuple
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.parser.main_parser import main, ParseMode, ParseTask
+from src.parser.main_parser import main as parser_main
+from src.parser.main_parser import MainParser, ParseMode, ParseTask
 from src.database.connection import db_manager
 from src.database.models import Film
 
@@ -40,7 +41,7 @@ async def test_daily_discovery() -> Tuple[str, bool, str]:
 
     try:
         # Run daily discovery with minimal load
-        result = await main(
+        result = await parser_main(
             ParseMode.DAILY,
             ParseTask.DISCOVER_FILMS,
             limit=1,  # Parse only 1 catalog page
@@ -166,7 +167,7 @@ async def test_update_ratings() -> Tuple[str, bool, str]:
             session.close()
 
         # Run update ratings with minimal load
-        result = await main(
+        result = await parser_main(
             ParseMode.DAILY,
             ParseTask.UPDATE_RATINGS,
             limit=2,  # Update only 2 films for speed
@@ -240,9 +241,6 @@ async def test_rating_calculation_logic() -> Tuple[str, bool, str]:
     test_name = "Rating Calculation Logic"
 
     try:
-        # Import MainParser to test its methods
-        from src.parser.main_parser import MainParser
-
         parser = MainParser()
 
         test_cases = [
