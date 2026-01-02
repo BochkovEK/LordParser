@@ -297,6 +297,106 @@ class MainParser:
         finally:
             session.close()
 
+    # =============================================================================
+    # Рейтинг расчет
+    # =============================================================================
+
+    def _calculate_base_rating(self, kp: Optional[float], imdb: Optional[float],
+                              lf: Optional[float], lf_votes: int) -> float:
+        """
+        Calculate base rating using weighted formula
+
+        Formula: (kp * w_kp + imdb * w_imdb + lf * w_lf) / (w_kp + w_imdb + w_lf)
+        where w_lf = wd_lf * lf_votes / (lf_votes + k)
+        """
+        from src.config.config import RATING_WEIGHTS
+
+        # Get weights from config
+        w_kp = RATING_WEIGHTS['kp']
+        w_imdb = RATING_WEIGHTS['imdb']
+        wd_lf = RATING_WEIGHTS['lf_base']
+        k = RATING_WEIGHTS['smoothing_k']
+
+        # Normalize ratings to 0-10 scale
+        # Some sources might be on 10-point scale (e.g., 8.4/10)
+        if kp and kp > 10:
+            kp_norm = kp / 10
+        else:
+            kp_norm = kp or 0
+
+        if imdb and imdb > 10:
+            imdb_norm = imdb / 10
+        else:
+            imdb_norm = imdb or 0
+
+        lf_norm = lf if lf else 0
+
+        # Calculate dynamic LordFilm weight based on votes
+        if lf_votes > 0:
+            w_lf = wd_lf * lf_votes / (lf_votes + k)
+        else:
+            w_lf = 0
+            lf_norm = 0
+
+        # Calculate weighted average
+        numerator = (kp_norm * w_kp) + (imdb_norm * w_imdb) + (lf_norm * w_lf)
+        denominator = w_kp + w_imdb + w_lf
+
+        if denominator == 0:
+            return 0.0
+
+        return numerator / denominator
+
+    def _get_country_multiplier(self, country: Optional[str]) -> float:
+        """Get multiplier based on country tier"""
+        from src.config.config import COUNTRY_MULTIPLIERS, COUNTRY_LISTS
+
+        if not country:
+            return COUNTRY_MULTIPLIERS['level3']
+
+        country_lower = country.strip().lower()
+
+        # Check level1 countries
+        for country_name in COUNTRY_LISTS['level1']:
+            if country_name.lower() in country_lower:
+                return COUNTRY_MULTIPLIERS['level1']
+
+        # Check level2 countries
+        for country_name in COUNTRY_LISTS['level2']:
+            if country_name.lower() in country_lower:
+                return COUNTRY_MULTIPLIERS['level2']
+
+        # All others → level3
+        return COUNTRY_MULTIPLIERS['level3']
+
+    def _calculate_final_rating(self, film_data: Dict[str, Any]) -> float:
+        """Calculate final rating with country multiplier"""
+        # Get data
+        kp = film_data.get('kp_rating')
+        imdb = film_data.get('imdb_rating')
+        lf = film_data.get('lf_rating')
+
+        # Calculate total votes on LordFilm
+        lf_likes = film_data.get('lf_likes', 0) or 0
+        lf_dislikes = film_data.get('lf_dislikes', 0) or 0
+        lf_votes = lf_likes + lf_dislikes
+
+        country = film_data.get('country')
+
+        # Calculate base rating
+        base_rating = self._calculate_base_rating(kp, imdb, lf, lf_votes)
+
+        # Apply country multiplier
+        country_multiplier = self._get_country_multiplier(country)
+        final_rating = base_rating * country_multiplier
+
+        # Round to 2 decimal places
+        return round(final_rating, 2)
+
+    # =============================================================================
+    # Основные задачи парсинга
+    # =============================================================================
+
     async def _update_existing_ratings(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """
         Update ratings for existing films in database with batching
@@ -588,6 +688,10 @@ class MainParser:
         logger.info(f"✅ Completed full_catalog_parse: {stats}")
         return stats
 
+    # =============================================================================
+    # Вспомогательные методы
+    # =============================================================================
+
     async def _process_film_links(self, film_links: List[str],
                                  update_existing: bool = False,
                                  check_should_stop: bool = False) -> Dict[str, int]:
@@ -768,7 +872,7 @@ class MainParser:
             session.close()
 
     async def _save_new_film_to_db(self, film_data: Dict[str, Any]) -> bool:
-        """Save new film to database"""
+        """Save new film to database with final rating"""
         session = db_manager.get_session()
         try:
             # Двойная проверка на race condition
@@ -776,6 +880,9 @@ class MainParser:
             if existing:
                 logger.debug(f"Film already exists (race condition): {film_data['url']}")
                 return False
+
+            # Рассчитываем итоговый рейтинг
+            final_rating = self._calculate_final_rating(film_data)
 
             # Создаем новый фильм
             film = Film(
@@ -793,6 +900,8 @@ class MainParser:
                 lf_dislikes=film_data.get('lf_dislikes'),
                 kp_rating=film_data.get('kp_rating'),
                 imdb_rating=film_data.get('imdb_rating'),
+                final_rating=final_rating,                    # <-- ДОБАВЛЕНО
+                rating_calculated_at=datetime.now(),          # <-- ДОБАВЛЕНО
                 is_active=True,
                 first_seen_at=datetime.now(),
                 last_updated=datetime.now()
@@ -813,7 +922,7 @@ class MainParser:
                 session.add(history)
                 session.commit()
 
-            logger.debug(f"Added new film: {film_data.get('title', 'Unknown')}")
+            logger.debug(f"Added new film: {film_data.get('title', 'Unknown')} with rating {final_rating}")
             return True
 
         except Exception as e:
@@ -824,13 +933,16 @@ class MainParser:
             session.close()
 
     async def _update_film_in_db(self, film_data: Dict[str, Any]) -> bool:
-        """Update existing film in database"""
+        """Update existing film in database with recalculated rating"""
         session = db_manager.get_session()
         try:
             film = session.query(Film).filter(Film.url == film_data['url']).first()
             if not film:
                 logger.warning(f"Film not found for update: {film_data['url']}")
                 return False
+
+            # Рассчитываем итоговый рейтинг
+            final_rating = self._calculate_final_rating(film_data)
 
             # Обновляем поля
             update_fields = {
@@ -847,6 +959,8 @@ class MainParser:
                 'lf_dislikes': film_data.get('lf_dislikes'),
                 'kp_rating': film_data.get('kp_rating'),
                 'imdb_rating': film_data.get('imdb_rating'),
+                'final_rating': final_rating,
+                'rating_calculated_at': datetime.now(),
                 'is_active': True,
                 'last_updated': datetime.now()
             }
@@ -869,6 +983,7 @@ class MainParser:
                 session.add(history)
                 session.commit()
 
+            logger.debug(f"Updated film: {film_data.get('title', 'Unknown')} with new rating {final_rating}")
             return True
 
         except Exception as e:
@@ -922,26 +1037,3 @@ async def main(mode: ParseMode, task: ParseTask, **kwargs) -> Dict[str, Any]:
     """
     parser = get_main_parser()
     return await parser.main(mode, task, **kwargs)
-
-
-if __name__ == "__main__":
-    # Тестовый запуск
-    async def test():
-        print("🧪 Testing Main Parser...")
-
-        # Test 1: Health check
-        print("\n1. Testing health check (dry run):")
-        result = await main(ParseMode.DAILY, ParseTask.DISCOVER_FILMS, dry_run=True)
-        print(f"Result: {result}")
-
-        # Test 2: Discover films with limit
-        print("\n2. Testing discover_new_films (with limit):")
-        result = await main(ParseMode.DAILY, ParseTask.DISCOVER_FILMS, limit=2)
-        print(f"Result: {result}")
-
-        # Test 3: Update ratings with limit
-        print("\n3. Testing update_existing_ratings (with limit):")
-        result = await main(ParseMode.DAILY, ParseTask.UPDATE_RATINGS, limit=2)
-        print(f"Result: {result}")
-
-    asyncio.run(test())

@@ -24,16 +24,20 @@ class Film(Base):
     actors = Column(JSON)  # Список актеров
     description = Column(Text)
 
-    # Рейтинги
+    # Рейтинги (сырые данные)
     lf_rating = Column(Float)  # LordFilm рейтинг
     lf_likes = Column(Integer)  # Лайки LordFilm
     lf_dislikes = Column(Integer)  # Дизлайки LordFilm
     kp_rating = Column(Float)  # КиноПоиск рейтинг
     imdb_rating = Column(Float)  # IMDB рейтинг
 
+    # Итоговый рейтинг (вычисленный)
+    final_rating = Column(Float, nullable=True)  # Вычисленный итоговый рейтинг 0-10
+    rating_calculated_at = Column(DateTime, nullable=True)  # Когда был вычислен рейтинг
+
     # Системные поля
     is_active = Column(Boolean, default=True)
-    first_seen_at = Column(DateTime, default=datetime.utcnow)  # ← Используем datetime по умолчанию
+    first_seen_at = Column(DateTime, default=datetime.utcnow)
     last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -41,7 +45,7 @@ class Film(Base):
     parsing_history = relationship("ParsingHistory", back_populates="film")
 
     def __repr__(self):
-        return f"<Film(id={self.id}, title='{self.title}', year={self.year})>"
+        return f"<Film(id={self.id}, title='{self.title}', year={self.year}, final_rating={self.final_rating})>"
 
 
 class ParsingSession(Base):

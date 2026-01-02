@@ -1,16 +1,101 @@
 """
 LordFilm Parser - Configuration module
 Loads settings from config.ini with environment variable overrides
+
+Structure:
+1. Constants with default values
+2. Functions for configuration loading
+3. Override constants with loaded config
 """
 
 import os
 import sys
 import configparser
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
+# =============================================================================
+# 1. CONSTANTS WITH DEFAULT VALUES (if config.ini fails to load)
+# =============================================================================
 
-def find_project_root():
+# Database Configuration - defaults
+DB_HOST = 'localhost'
+DB_PORT = 5432
+DB_NAME = 'lordfilm_db'
+DB_USER = 'lordfilm_user'
+DB_PASSWORD = ''
+
+# Selenium Configuration - defaults
+SELENIUM_URL = os.getenv('SELENIUM_URL', 'http://localhost:4444/wd/hub')
+SELENIUM_TIMEOUT = 30
+REQUEST_TIMEOUT = 15
+MAX_CONCURRENT_PARSE_TASKS = 5
+
+# Telegram Bot Configuration - defaults
+BOT_TOKEN = ''
+
+# Parser Core Settings - defaults
+DEFAULT_URL = 'https://sr.lordfilm17.ru'
+DEFAULT_CATEGORY = 'filmy'
+YEAR_START = 2016
+YEAR_END = 2025
+
+# Parsing Performance Settings - defaults
+LINKS_BATCH_SIZE = 100
+FILMS_BATCH_SIZE = 10
+BATCH_DELAY = 1.0
+FILM_DELAY = 2.0
+REQUEST_DELAY = 1.0
+MAX_RETRIES = 2
+RETRY_DELAY = 5.0
+
+# URL Generation Settings - defaults
+DAILY_PAGES = 50
+WEEKLY_PAGES = 50
+PARSE_PAGES = 50
+
+# Logging Configuration - defaults
+LOG_LEVEL = 'INFO'
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_DATE_FORMAT = 'Y-m-d H:M:S'
+
+# Feature Flags - defaults
+ENABLE_METRICS = False
+ENABLE_HEALTH_CHECKS = False
+SAVE_HTML_DEBUG = False
+
+# Rating Calculation Configuration - defaults (HARDCODED, not from config.ini)
+RATING_WEIGHTS = {
+    'kp': 1.0,          # КиноПоиск вес
+    'imdb': 0.5,        # IMDb вес (в 2 раза меньше KP)
+    'lf_base': 2.0,     # Базовый вес LordFilm
+    'smoothing_k': 50,  # Константа сглаживания для голосов
+}
+
+COUNTRY_MULTIPLIERS = {
+    'level1': 1.0,      # Лучшие кинематографии
+    'level2': 0.9,      # Средние
+    'level3': 0.7,      # Остальные
+}
+
+COUNTRY_LISTS = {
+    'level1': [
+        'США', 'Великобритания', 'Франция', 'Германия', 'Италия',
+        'Россия', 'СССР', 'Канада', 'Австралия', 'Испания'
+    ],
+    'level2': [
+        'Польша', 'Чехия', 'Венгрия', 'Швеция', 'Норвегия', 'Дания',
+        'Финляндия', 'Нидерланды', 'Бельгия', 'Австрия', 'Швейцария',
+        'Гонконг', 'Тайвань', 'Индия', 'Бразилия', 'Аргентина', 'Мексика',
+        'Иран', 'Турция', 'Израиль'
+    ]
+}
+
+# =============================================================================
+# 2. FUNCTIONS FOR CONFIGURATION LOADING
+# =============================================================================
+
+def find_project_root() -> Path:
     """Find project root directory"""
     current = Path(__file__).parent
     while current.name != 'src' and current.parent != current:
@@ -28,60 +113,56 @@ def load_config(config_path: str = None) -> configparser.ConfigParser:
     Priority:
     1. Environment variables (DATABASE_HOST, PARSER_DEFAULT_URL, etc.)
     2. config.ini file
-    3. Default values
+    3. Default values (from constants above)
     """
     config = configparser.ConfigParser()
 
-    # Set comprehensive defaults
+    # Set defaults matching our constants
     config.read_dict({
         'database': {
-            'host': 'localhost',
-            'port': '5432',
-            'name': 'lordfilm_db',
-            'user': 'lordfilm_user',
-            'password': '',
+            'host': DB_HOST,
+            'port': str(DB_PORT),
+            'name': DB_NAME,
+            'user': DB_USER,
+            'password': DB_PASSWORD,
         },
         'telegram': {
-            'bot_token': '',
+            'bot_token': BOT_TOKEN,
         },
         'parser': {
-            'default_url': 'https://sr.lordfilm17.ru',
-            'default_category': 'filmy',
-            'year_start': '2016',
-            'year_end': '2025',
+            'default_url': DEFAULT_URL,
+            'default_category': DEFAULT_CATEGORY,
+            'year_start': str(YEAR_START),
+            'year_end': str(YEAR_END),
         },
         'selenium': {
-            'timeout': '30',
-            'request_timeout': '15',
-            'max_concurrent_tasks': '5',
+            'timeout': str(SELENIUM_TIMEOUT),
+            'request_timeout': str(REQUEST_TIMEOUT),
+            'max_concurrent_tasks': str(MAX_CONCURRENT_PARSE_TASKS),
         },
         'performance': {
-            'links_batch_size': '100',
-            'films_batch_size': '10',
-            'batch_delay': '1',
-            'film_delay': '2',
-            'request_delay': '1.0',
-            'max_retries': '2',
-            'retry_delay': '5',
+            'links_batch_size': str(LINKS_BATCH_SIZE),
+            'films_batch_size': str(FILMS_BATCH_SIZE),
+            'batch_delay': str(BATCH_DELAY),
+            'film_delay': str(FILM_DELAY),
+            'request_delay': str(REQUEST_DELAY),
+            'max_retries': str(MAX_RETRIES),
+            'retry_delay': str(RETRY_DELAY),
         },
         'url_generation': {
-            'daily_pages': '50',
-            'weekly_pages': '50',
-            'parse_pages': '50',
+            'daily_pages': str(DAILY_PAGES),
+            'weekly_pages': str(WEEKLY_PAGES),
+            'parse_pages': str(PARSE_PAGES),
         },
         'logging': {
-            'level': 'INFO',
-            'format': '%%(asctime)s - %%(name)s - %%(levelname)s - %%(message)s',
-            'date_format': 'Y-m-d H:M:S',
-        },
-        'schedules': {
-            'daily_pages': '50',
-            'weekly_pages': '50',
+            'level': LOG_LEVEL,
+            'format': LOG_FORMAT.replace('%', '%%'),  # Escape for configparser
+            'date_format': LOG_DATE_FORMAT,
         },
         'features': {
-            'enable_metrics': 'false',
-            'enable_health_checks': 'false',
-            'save_html_debug': 'false',
+            'enable_metrics': 'true' if ENABLE_METRICS else 'false',
+            'enable_health_checks': 'true' if ENABLE_HEALTH_CHECKS else 'false',
+            'save_html_debug': 'true' if SAVE_HTML_DEBUG else 'false',
         }
     })
 
@@ -118,142 +199,67 @@ def load_config(config_path: str = None) -> configparser.ConfigParser:
     return config
 
 
-# Load configuration
-_config = load_config()
-
-# =============================================================================
-# Database Configuration (backward compatibility)
-# =============================================================================
-DB_CONFIG = {
-    'host': _config['database']['host'],
-    'port': _config['database'].getint('port'),
-    'database': _config['database']['name'],
-    'user': _config['database']['user'],
-    'password': _config['database']['password'],
-}
-
-# =============================================================================
-# Selenium Configuration
-# =============================================================================
-SELENIUM_URL = os.getenv('SELENIUM_URL', 'http://localhost:4444/wd/hub')
-SELENIUM_TIMEOUT = _config['selenium'].getint('timeout')
-REQUEST_TIMEOUT = _config['selenium'].getint('request_timeout')
-MAX_CONCURRENT_PARSE_TASKS = _config['selenium'].getint('max_concurrent_tasks')
-
-# =============================================================================
-# Telegram Bot Configuration
-# =============================================================================
-BOT_TOKEN = _config['telegram']['bot_token']
-
-# =============================================================================
-# Parser Core Settings
-# =============================================================================
-DEFAULT_URL = _config['parser']['default_url']
-DEFAULT_CATEGORY = _config['parser']['default_category']
-
-# Year range for parsing
-YEAR_START = _config['parser'].getint('year_start')
-YEAR_END = _config['parser'].getint('year_end')
-YEAR_RANGE = (YEAR_START, YEAR_END)
-
-# =============================================================================
-# Parsing Performance Settings
-# =============================================================================
-
-# Batch processing
-LINKS_BATCH_SIZE = _config['performance'].getint('links_batch_size')
-FILMS_BATCH_SIZE = _config['performance'].getint('films_batch_size')
-
-# Delays between operations (in seconds)
-BATCH_DELAY = _config['performance'].getfloat('batch_delay')
-FILM_DELAY = _config['performance'].getfloat('film_delay')
-REQUEST_DELAY = _config['performance'].getfloat('request_delay')
-
-# Retry configuration
-MAX_RETRIES = _config['performance'].getint('max_retries')
-RETRY_DELAY = _config['performance'].getfloat('retry_delay')
-
-# =============================================================================
-# URL Generation Settings
-# =============================================================================
-DAILY_PAGES = _config['url_generation'].getint('daily_pages')
-WEEKLY_PAGES = _config['url_generation'].getint('weekly_pages')
-PARSE_PAGES = _config['url_generation'].getint('parse_pages')
-
-# Schedule-specific settings
-DAILY_PAGES = _config['schedules'].getint('daily_pages')
-WEEKLY_PAGES = _config['schedules'].getint('weekly_pages')
-
-# =============================================================================
-# Logging Configuration
-# =============================================================================
-LOG_LEVEL = _config['logging']['level']
-LOG_FORMAT = _config['logging']['format']
-LOG_DATE_FORMAT = _config['logging']['date_format']
-
-LOGGING_CONFIG = {
-    'level': LOG_LEVEL,
-    'format': LOG_FORMAT,
-    'date_format': LOG_DATE_FORMAT,
-}
-
-# =============================================================================
-# Feature Flags
-# =============================================================================
-ENABLE_METRICS = _config['features'].getboolean('enable_metrics')
-ENABLE_HEALTH_CHECKS = _config['features'].getboolean('enable_health_checks')
-SAVE_HTML_DEBUG = _config['features'].getboolean('save_html_debug')
-
-# =============================================================================
-# Helper functions
-# =============================================================================
 def get_database_url() -> str:
     """Generate SQLAlchemy database URL"""
-    db = DB_CONFIG
-    return f"postgresql://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['database']}"
+    return f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 
 def get_config_dict() -> Dict[str, Any]:
     """Get all configuration as dictionary"""
     return {
-        'database': dict(_config['database']),
-        'parser': dict(_config['parser']),
-        'performance': dict(_config['performance']),
-        'logging': dict(_config['logging']),
+        'database': {
+            'host': DB_HOST,
+            'port': DB_PORT,
+            'name': DB_NAME,
+            'user': DB_USER,
+            'password': DB_PASSWORD,
+        },
+        'parser': {
+            'default_url': DEFAULT_URL,
+            'default_category': DEFAULT_CATEGORY,
+            'year_start': YEAR_START,
+            'year_end': YEAR_END,
+        },
+        'rating': {
+            'weights': RATING_WEIGHTS,
+            'country_multipliers': COUNTRY_MULTIPLIERS,
+            'country_lists': COUNTRY_LISTS,
+        }
     }
 
 
 def reload_config(config_path: str = None):
-    """Reload configuration from file"""
-    global _config, DB_CONFIG, SELENIUM_TIMEOUT, REQUEST_TIMEOUT, \
-           MAX_CONCURRENT_PARSE_TASKS, BOT_TOKEN, DEFAULT_URL, \
-           DEFAULT_CATEGORY, YEAR_START, YEAR_END, YEAR_RANGE, \
-           LINKS_BATCH_SIZE, FILMS_BATCH_SIZE, BATCH_DELAY, \
-           FILM_DELAY, REQUEST_DELAY, MAX_RETRIES, RETRY_DELAY, \
-           DAILY_PAGES, WEEKLY_PAGES, PARSE_PAGES, LOG_LEVEL, \
-           LOG_FORMAT, LOG_DATE_FORMAT, LOGGING_CONFIG, \
-           ENABLE_METRICS, ENABLE_HEALTH_CHECKS, SAVE_HTML_DEBUG
+    """Reload configuration from file and update constants"""
+    # This would need to be implemented to update global constants
+    # For now, it's a placeholder
+    pass
 
-    _config = load_config(config_path)
 
-    # Reload all variables
-    DB_CONFIG = {
-        'host': _config['database']['host'],
-        'port': _config['database'].getint('port'),
-        'database': _config['database']['name'],
-        'user': _config['database']['user'],
-        'password': _config['database']['password'],
-    }
+# =============================================================================
+# 3. LOAD CONFIGURATION AND OVERRIDE CONSTANTS
+# =============================================================================
 
-    SELENIUM_TIMEOUT = _config['selenium'].getint('timeout')
-    REQUEST_TIMEOUT = _config['selenium'].getint('request_timeout')
-    MAX_CONCURRENT_PARSE_TASKS = _config['selenium'].getint('max_concurrent_tasks')
+try:
+    _config = load_config()
+
+    # Override constants with loaded config
+    DB_HOST = _config['database']['host']
+    DB_PORT = _config['database'].getint('port')
+    DB_NAME = _config['database']['name']
+    DB_USER = _config['database']['user']
+    DB_PASSWORD = _config['database']['password']
+
     BOT_TOKEN = _config['telegram']['bot_token']
+
     DEFAULT_URL = _config['parser']['default_url']
     DEFAULT_CATEGORY = _config['parser']['default_category']
     YEAR_START = _config['parser'].getint('year_start')
     YEAR_END = _config['parser'].getint('year_end')
-    YEAR_RANGE = (YEAR_START, YEAR_END)
+
+    SELENIUM_TIMEOUT = _config['selenium'].getint('timeout')
+    REQUEST_TIMEOUT = _config['selenium'].getint('request_timeout')
+    MAX_CONCURRENT_PARSE_TASKS = _config['selenium'].getint('max_concurrent_tasks')
+
     LINKS_BATCH_SIZE = _config['performance'].getint('links_batch_size')
     FILMS_BATCH_SIZE = _config['performance'].getint('films_batch_size')
     BATCH_DELAY = _config['performance'].getfloat('batch_delay')
@@ -261,22 +267,48 @@ def reload_config(config_path: str = None):
     REQUEST_DELAY = _config['performance'].getfloat('request_delay')
     MAX_RETRIES = _config['performance'].getint('max_retries')
     RETRY_DELAY = _config['performance'].getfloat('retry_delay')
+
     DAILY_PAGES = _config['url_generation'].getint('daily_pages')
     WEEKLY_PAGES = _config['url_generation'].getint('weekly_pages')
     PARSE_PAGES = _config['url_generation'].getint('parse_pages')
+
     LOG_LEVEL = _config['logging']['level']
     LOG_FORMAT = _config['logging']['format']
     LOG_DATE_FORMAT = _config['logging']['date_format']
 
-    LOGGING_CONFIG = {
-        'level': LOG_LEVEL,
-        'format': LOG_FORMAT,
-        'date_format': LOG_DATE_FORMAT,
-    }
-
     ENABLE_METRICS = _config['features'].getboolean('enable_metrics')
     ENABLE_HEALTH_CHECKS = _config['features'].getboolean('enable_health_checks')
     SAVE_HTML_DEBUG = _config['features'].getboolean('save_html_debug')
+
+except Exception as e:
+    print(f"⚠️ Warning: Failed to load config.ini, using defaults: {e}", file=sys.stderr)
+
+
+# =============================================================================
+# 4. DERIVED CONSTANTS (calculated from other constants)
+# =============================================================================
+
+YEAR_RANGE = (YEAR_START, YEAR_END)
+
+LOGGING_CONFIG = {
+    'level': LOG_LEVEL,
+    'format': LOG_FORMAT,
+    'date_format': LOG_DATE_FORMAT,
+}
+
+DB_CONFIG = {
+    'host': DB_HOST,
+    'port': DB_PORT,
+    'database': DB_NAME,
+    'user': DB_USER,
+    'password': DB_PASSWORD,
+}
+
+RATING_CONFIG = {
+    'weights': RATING_WEIGHTS,
+    'country_multipliers': COUNTRY_MULTIPLIERS,
+    'country_lists': COUNTRY_LISTS,
+}
 
 
 # =============================================================================
@@ -289,3 +321,4 @@ if __name__ == '__main__':
     print(f"Parser URL: {DEFAULT_URL}")
     print(f"Daily pages: {DAILY_PAGES}")
     print(f"Log level: {LOG_LEVEL}")
+    print(f"Rating weights: {RATING_WEIGHTS}")

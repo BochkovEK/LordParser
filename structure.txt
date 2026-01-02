@@ -69,6 +69,31 @@ systemd timer → main_runner.py --auto → health checks → main_parser.main()
 
 systemd timer → main_runner.py → main_parser.py → URLGenerator → LinkParser
 
+Основная задача main_parser.py:
+
+text
+Оркестрировать весь процесс парсинга фильмов:
+1. Принять команду (режим + задача)
+2. Координировать работу других модулей
+3. Обрабатывать ошибки и ретраи
+4. Сохранять результаты в БД с вычислением итогового рейтинга
+Что он делает:
+
+text
+Вход: ParseMode (DAILY/WEEKLY) + ParseTask (DISCOVER_FILMS/UPDATE_RATINGS)
+    ↓
+Создает сессию в БД
+    ↓
+Запускает нужный сценарий:
+   • DISCOVER_FILMS → URLGenerator → LinkParser → FilmParser → сохранить новые
+   • UPDATE_RATINGS → берет фильмы из БД → FilmParser → обновить рейтинги
+    ↓
+Вычисляет итоговый рейтинг (формула с весами и страной)
+    ↓
+Сохраняет в БД с final_rating
+    ↓
+Возвращает статистику
+
 =========================
 python
 # Парсинг
