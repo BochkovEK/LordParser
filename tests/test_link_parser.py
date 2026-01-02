@@ -1,7 +1,7 @@
-# !/usr/bin/env python3
+#!/usr/bin/env python3
 """
 LordFilm LinkParser Test Suite
-Three comprehensive tests for LinkParser functionality
+Comprehensive tests for LinkParser functionality
 """
 
 import sys
@@ -31,11 +31,8 @@ def setup_logging():
 
 def test_site_availability() -> Tuple[str, bool, str]:
     """
-    Test 1: URLGenerator + LinkParser integration with real site
+    URLGenerator + LinkParser integration with real site
     Should find film links on catalog page
-
-    Returns:
-        Tuple: (test_name, success, message)
     """
     test_name = "Site Availability & Integration"
 
@@ -57,32 +54,30 @@ def test_site_availability() -> Tuple[str, bool, str]:
         links = link_parser.parse_links_from_page(test_url)
 
         if links:
-            # Success - found links
             return (
                 test_name,
                 True,
-                f"✅ Found {len(links)} links on catalog page {test_url}"
+                f"Found {len(links)} links on catalog page {test_url}"
             )
         else:
-            # No links found - might be site structure issue
             return (
                 test_name,
                 False,
-                f"❌ No links found on catalog page {test_url}. Check selectors or site structure."
+                f"No links found on catalog page {test_url}. Check selectors or site structure."
             )
 
     except ConnectionError as e:
         return (
             test_name,
             False,
-            f"❌ Site unavailable (ConnectionError): {str(e)[:100]}..."
+            f"Site unavailable (ConnectionError): {str(e)[:100]}..."
         )
 
     except Exception as e:
         return (
             test_name,
             False,
-            f"❌ Unexpected error {type(e).__name__}: {str(e)[:100]}..."
+            f"Unexpected error {type(e).__name__}: {str(e)[:100]}..."
         )
 
     finally:
@@ -91,67 +86,60 @@ def test_site_availability() -> Tuple[str, bool, str]:
 
 def test_site_unavailability() -> Tuple[str, bool, str]:
     """
-    Test 2: LinkParser with broken URL should raise ConnectionError after retries
-
-    Returns:
-        Tuple: (test_name, success, message)
+    LinkParser with broken URL should raise ConnectionError after retries
     """
     test_name = "Site Unavailability Handling"
 
     link_parser = create_link_parser()
 
     # Create intentionally broken URL
-    # broken_domain = "nonexistent-domain-" + str(hash("test"))[:8] + ".invalid"
-    broken_domain = "https://sr.lordfilm17.ru"
-    broken_url = f"{broken_domain}/filmy/page/1/"
+    broken_domain = "nonexistent-domain-" + str(hash("test"))[:8] + ".invalid"
+    broken_url = f"http://{broken_domain}/filmy/page/1/"
 
     try:
         links = link_parser.parse_links_from_page(broken_url)
 
-        # If we get here - FAIL (should have raised exception)
         return (
             test_name,
             False,
-            f"❌ LinkParser returned {len(links)} links for broken URL (should raise ConnectionError)"
+            f"LinkParser returned {len(links)} links for broken URL (should raise ConnectionError)"
         )
 
     except ConnectionError as e:
         error_msg = str(e)
-        # Check if error mentions retries or attempts
         if any(word in error_msg.lower() for word in ['attempt', 'retry', 'try']):
             return (
                 test_name,
                 True,
-                f"✅ ConnectionError raised after retries: {error_msg[:120]}..."
+                f"ConnectionError raised after retries: {error_msg[:120]}..."
             )
         else:
             return (
                 test_name,
                 True,
-                f"✅ ConnectionError raised: {error_msg[:120]}..."
+                f"ConnectionError raised: {error_msg[:120]}..."
             )
 
     except TimeoutError as e:
         return (
             test_name,
             True,
-            f"✅ TimeoutError raised (acceptable): {str(e)[:120]}..."
+            f"TimeoutError raised: {str(e)[:120]}..."
         )
 
     except Exception as e:
         error_msg = str(e).lower()
-        # Accept WebDriverException or other network errors
         if any(err in error_msg for err in ['webdriver', 'connection', 'timeout', 'unreachable']):
             return (
                 test_name,
                 True,
-                f"✅ Network error raised ({type(e).__name__}): {str(e)[:120]}..."
+                f"Network error raised ({type(e).__name__}): {str(e)[:120]}..."
             )
         else:
             return (
                 test_name,
                 False,
-                f"❌ Wrong exception type {type(e).__name__}: {str(e)[:120]}..."
+                f"Wrong exception type {type(e).__name__}: {str(e)[:120]}..."
             )
 
     finally:
@@ -160,11 +148,8 @@ def test_site_unavailability() -> Tuple[str, bool, str]:
 
 def test_link_validation() -> Tuple[str, bool, str]:
     """
-    Test 3: Validate that extracted links match film URL patterns
+    Validate that extracted links match film URL patterns
     Uses same validation logic as link_parser._is_film_url()
-
-    Returns:
-        Tuple: (test_name, success, message)
     """
     test_name = "Link Format Validation"
 
@@ -178,7 +163,7 @@ def test_link_validation() -> Tuple[str, bool, str]:
     ))
 
     if not test_urls:
-        return (test_name, False, "❌ Cannot get test URL from URLGenerator")
+        return (test_name, False, "Cannot get test URL from URLGenerator")
 
     test_url = test_urls[0]
 
@@ -189,20 +174,17 @@ def test_link_validation() -> Tuple[str, bool, str]:
             return (
                 test_name,
                 False,
-                f"❌ No links found to validate on {test_url}"
+                f"No links found to validate on {test_url}"
             )
 
         # Same validation logic as in link_parser._is_film_url()
         def is_valid_film_url(url: str) -> bool:
-            """Replica of link_parser._is_film_url() logic"""
             if not url:
                 return False
 
-            # Must contain /filmy/
             if '/filmy/' not in url:
                 return False
 
-            # Exclude non-film pages (same patterns as in parser)
             exclude_patterns = [
                 r'/filmy/$',
                 r'/filmy/[^/]+/$',
@@ -214,7 +196,6 @@ def test_link_validation() -> Tuple[str, bool, str]:
             if any(re.search(pattern, url) for pattern in exclude_patterns):
                 return False
 
-            # Check film pattern
             film_pattern = r'/filmy/\d+-[^/]+-\d{4}\.html$'
             film_pattern_alt = r'/filmy/\d+-[^/]+\.html$'
 
@@ -223,12 +204,10 @@ def test_link_validation() -> Tuple[str, bool, str]:
                     re.search(film_pattern_alt, url) is not None
             )
 
-            # Must contain ID
             has_id = re.search(r'/filmy/(\d+)', url) is not None
 
             return is_valid_film and has_id
 
-        # Validate each link
         valid_count = 0
         invalid_examples = []
 
@@ -236,51 +215,50 @@ def test_link_validation() -> Tuple[str, bool, str]:
             if is_valid_film_url(link):
                 valid_count += 1
             else:
-                if len(invalid_examples) < 3:  # Store up to 3 invalid examples
+                if len(invalid_examples) < 3:
                     invalid_examples.append(os.path.basename(link))
 
         total_links = len(links)
         valid_percentage = (valid_count / total_links) * 100 if total_links > 0 else 0
 
-        # Determine result based on validation rate
         if valid_percentage >= 90:
             return (
                 test_name,
                 True,
-                f"✅ Excellent: {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
+                f"Excellent: {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
             )
         elif valid_percentage >= 70:
             return (
                 test_name,
                 True,
-                f"✅ Good: {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
+                f"Good: {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
             )
         elif valid_percentage >= 50:
             return (
                 test_name,
                 False,
-                f"❌ Poor: Only {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
+                f"Poor: Only {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%)"
             )
         else:
             invalid_info = f" Invalid examples: {invalid_examples}" if invalid_examples else ""
             return (
                 test_name,
                 False,
-                f"❌ Bad: Only {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%){invalid_info}"
+                f"Bad: Only {valid_count}/{total_links} valid film links ({valid_percentage:.1f}%){invalid_info}"
             )
 
     except ConnectionError as e:
         return (
             test_name,
             False,
-            f"❌ Site unavailable: {str(e)[:100]}..."
+            f"Site unavailable: {str(e)[:100]}..."
         )
 
     except Exception as e:
         return (
             test_name,
             False,
-            f"❌ Unexpected error {type(e).__name__}: {str(e)[:100]}..."
+            f"Unexpected error {type(e).__name__}: {str(e)[:100]}..."
         )
 
     finally:
@@ -294,35 +272,51 @@ def run_test_suite() -> bool:
     print("🚀 LordFilm LinkParser Test Suite")
     print("=" * 60)
     print(f"Testing with base URL: {DEFAULT_URL}")
-    print("Three tests: 1) Site Availability, 2) Unavailability, 3) Link Validation")
-    print("=" * 60)
 
-    # Define all tests in order
+    # Define all tests
     tests = [
-        ("Site Availability & Integration", test_site_availability),
-        ("Site Unavailability Handling", test_site_unavailability),
-        ("Link Format Validation", test_link_validation),
+        test_site_availability,
+        test_site_unavailability,
+        test_link_validation,
     ]
+
+    # Get test names for display
+    test_names = []
+    for test_func in tests:
+        # Call function to get name (won't execute due to early return)
+        try:
+            # Create a dummy parser to avoid execution
+            name, _, _ = test_func.__call__.__doc__.split('\n', 1)[0], True, ""
+            test_names.append(name.strip())
+        except:
+            test_names.append(test_func.__name__.replace('_', ' ').title())
+
+    print(f"Tests: {', '.join(test_names)}")
+    print("=" * 60)
 
     results = []
 
     # Run all tests
-    for test_index, (test_display_name, test_func) in enumerate(tests, 1):
-        print(f"\n▶️ Running test {test_index}/{len(tests)}: {test_display_name}...")
+    for test_index, (test_func, test_display_name) in enumerate(zip(tests, test_names), 1):
+        print(f"\n▶️ Running: {test_display_name}...")
 
         try:
             test_name, success, message = test_func()
+
+            # Ensure we use the name from the function
+            if test_name != test_display_name:
+                test_display_name = test_name
 
             if success:
                 print(f"   ✅ {message}")
             else:
                 print(f"   ❌ {message}")
 
-            results.append((test_name, success, message))
+            results.append((test_display_name, success, message))
 
         except Exception as e:
             error_msg = f"Test crashed: {type(e).__name__}: {str(e)[:100]}"
-            print(f"   💥 Test crashed: {error_msg}")
+            print(f"   💥 {error_msg}")
             results.append((test_display_name, False, error_msg))
 
     # Print summary
@@ -335,12 +329,18 @@ def run_test_suite() -> bool:
 
     for idx, (test_name, success, message) in enumerate(results, 1):
         status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{idx:2d}. {status} - {test_name}")
+        print(f"{idx}. {status} - {test_name}")
+
         # Show brief message for failures
-        if not success and ":" in message:
-            brief_msg = message.split(":", 1)[1].strip()[:80]
+        if not success and message:
+            # Extract the main part of the message (before first colon if exists)
+            if ":" in message:
+                brief_msg = message.split(":", 1)[1].strip()[:60]
+            else:
+                brief_msg = message[:60]
+
             if brief_msg:
-                print(f"    💡 {brief_msg}...")
+                print(f"    {brief_msg}...")
 
     print(f"\n📈 Total: {passed_count}/{total_count} tests passed")
 
@@ -348,7 +348,7 @@ def run_test_suite() -> bool:
     if passed_count == total_count:
         print("\n🎉 ALL TESTS PASSED! LinkParser is working correctly.")
         return True
-    elif passed_count >= 2:  # At least 2/3 tests passed
+    elif passed_count >= total_count - 1:
         print("\n⚠️ ACCEPTABLE: Most tests passed. Review any failures.")
         return True
     else:
