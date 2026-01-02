@@ -200,10 +200,21 @@ class MainParser:
         # except Exception as e:
         #     checks.append(("database", False))
         #     logger.error(f"❌ Database connection failed: {e}")
+        # try:
+        #     session.query(Film).limit(1).first()  # Пробуем прочитать что-то
+        #     checks.append(("database", True))
+        # except:
+        #     checks.append(("database", False))
         try:
-            session.query(Film).limit(1).first()  # Пробуем прочитать что-то
+            session = db_manager.get_session()
+            logger.info(f"Testing DB connection to {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
+            logger.info(f"DB user: {DB_CONFIG['user']}")
+
+            session.close()
             checks.append(("database", True))
-        except:
+        except Exception as e:
+            logger.error(f"DB connection error: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
             checks.append(("database", False))
 
         # 2. Проверка парсеров
