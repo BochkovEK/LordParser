@@ -191,15 +191,20 @@ class MainParser:
         checks = []
 
         # 1. Проверка БД
+        # try:
+        #     session = db_manager.get_session()
+        #     session.execute(text('SELECT 1'))
+        #     session.close()
+        #     checks.append(("database", True))
+        #     logger.debug("✅ Database connection: OK")
+        # except Exception as e:
+        #     checks.append(("database", False))
+        #     logger.error(f"❌ Database connection failed: {e}")
         try:
-            session = db_manager.get_session()
-            session.execute(text('SELECT 1'))
-            session.close()
+            session.query(Film).limit(1).first()  # Пробуем прочитать что-то
             checks.append(("database", True))
-            logger.debug("✅ Database connection: OK")
-        except Exception as e:
+        except:
             checks.append(("database", False))
-            logger.error(f"❌ Database connection failed: {e}")
 
         # 2. Проверка парсеров
         try:
