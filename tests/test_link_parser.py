@@ -273,39 +273,25 @@ def run_test_suite() -> bool:
     print("=" * 60)
     print(f"Testing with base URL: {DEFAULT_URL}")
 
-    # Define all tests
+    # Define all tests with their display names
     tests = [
-        test_site_availability,
-        test_site_unavailability,
-        test_link_validation,
+        ("Site Availability & Integration", test_site_availability),
+        ("Site Unavailability Handling", test_site_unavailability),
+        ("Link Format Validation", test_link_validation),
     ]
 
-    # Get test names for display
-    test_names = []
-    for test_func in tests:
-        # Call function to get name (won't execute due to early return)
-        try:
-            # Create a dummy parser to avoid execution
-            name, _, _ = test_func.__call__.__doc__.split('\n', 1)[0], True, ""
-            test_names.append(name.strip())
-        except:
-            test_names.append(test_func.__name__.replace('_', ' ').title())
-
+    test_names = [name for name, _ in tests]
     print(f"Tests: {', '.join(test_names)}")
     print("=" * 60)
 
     results = []
 
     # Run all tests
-    for test_index, (test_func, test_display_name) in enumerate(zip(tests, test_names), 1):
+    for test_display_name, test_func in tests:
         print(f"\n▶️ Running: {test_display_name}...")
 
         try:
             test_name, success, message = test_func()
-
-            # Ensure we use the name from the function
-            if test_name != test_display_name:
-                test_display_name = test_name
 
             if success:
                 print(f"   ✅ {message}")
