@@ -20,7 +20,7 @@ from src.config.config import (
     SELENIUM_TIMEOUT, REQUEST_TIMEOUT,
     MAX_CONCURRENT_PARSE_TASKS
 )
-from src.config.schedules_conf import PARSING_SCHEDULES
+from src.config.scheduler_conf import PARSING_SCHEDULES
 
 # Парсеры
 from src.parser.url_generator import URLGenerator
