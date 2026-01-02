@@ -193,7 +193,7 @@ class MainParser:
         # 1. Проверка БД
         try:
             session = db_manager.get_session()
-            session.execute('SELECT 1')
+            session.execute(text('SELECT 1'))
             session.close()
             checks.append(("database", True))
             logger.debug("✅ Database connection: OK")
