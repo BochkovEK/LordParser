@@ -257,7 +257,7 @@ class MainParser:
         session = db_manager.get_session()
         try:
             db_session = ParsingSession(
-                start_time=datetime.now(),
+                started_at=datetime.now(),
                 parsing_type=f"{mode.value}_{task.value}",
                 status="in_progress"
             )
