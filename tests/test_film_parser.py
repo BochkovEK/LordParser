@@ -317,6 +317,7 @@ def test_film_parser_error_handling() -> Tuple[str, bool, str]:
     finally:
         film_parser.close()
 
+
 def run_tests() -> bool:
     """Run all tests and return overall result"""
     setup_logging()
@@ -324,15 +325,25 @@ def run_tests() -> bool:
     print("🎬 Film Parser Test Suite")
     print("=" * 60)
     print(f"Testing with base URL: {DEFAULT_URL}")
-    print("Tests: 1) Details Extraction, 2) Rating Logic, 3) Error Handling")
-    print("=" * 60)
 
+    # Собираем названия тестов для вывода
     tests = [
         ("Integration Chain", test_integration_chain),
-       # ("Film Details Extraction", test_film_details_extraction),
-       # ("Rating Calculation Logic", test_rating_calculation_logic),
-       # ("Error Handling", test_film_parser_error_handling),
+        # ("Film Details Extraction", test_film_details_extraction),
+        # ("Rating Calculation Logic", test_rating_calculation_logic),
+        # ("Error Handling", test_film_parser_error_handling),
     ]
+
+    for test_display_name, _ in tests:
+        # Убираем номера если уже есть
+        name = test_display_name.split(') ')[-1] if ') ' in test_display_name else test_display_name
+        test_names.append(name)
+
+    # Выводим пронумерованный список тестов
+    print("Tests:", end=" ")
+    for i, name in enumerate(test_names, 1):
+        print(f"{i}) {name}", end=", " if i < len(test_names) else "")
+    print("\n" + "=" * 60)
 
     results = []
 
