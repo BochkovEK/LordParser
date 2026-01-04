@@ -334,6 +334,8 @@ def run_tests() -> bool:
         # ("Error Handling", test_film_parser_error_handling),
     ]
 
+    test_names =[]
+
     for test_display_name, _ in tests:
         # Убираем номера если уже есть
         name = test_display_name.split(') ')[-1] if ') ' in test_display_name else test_display_name
