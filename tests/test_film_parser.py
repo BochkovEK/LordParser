@@ -13,7 +13,7 @@ from typing import Tuple, List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.parser.film_parser import create_film_parser
-from src.config.config import DEFAULT_URL
+from src.config.config import DEFAULT_URL, SELENIUM_URL, SELENIUM_TIMEOUT
 
 
 def setup_logging():
@@ -25,19 +25,26 @@ def setup_logging():
     logging.getLogger('selenium').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
-
 def test_link_parser_integration() -> Tuple[str, bool, str]:
     """
     Integration test: link_parser gets links, film_parser parses first one
     """
     test_name = "Link + Film Parser Integration"
 
-    link_parser = create_link_parser()
-    film_parser = create_film_parser()
+    link_parser = create_link_parser(
+                base_url=DEFAULT_URL,
+                timeout=SELENIUM_TIMEOUT,
+                load_delay=3
+            )
+    film_parser = create_film_parser(
+                base_url=DEFAULT_URL,
+                timeout=SELENIUM_TIMEOUT,
+                load_delay=3
+            )
 
     try:
         # 1. Link Parser: Get film links from catalog page
-        test_catalog_url = "https://mh.lordfilm131.ru/filmy/"
+        test_catalog_url = SELENIUM_URL
 
         print(f"📥 Getting links from: {test_catalog_url}")
         film_links = link_parser.parse_links_from_page(test_catalog_url)
@@ -196,7 +203,6 @@ def test_film_details_extraction() -> Tuple[str, bool, str]:
     finally:
         film_parser.close()
 
-
 def test_rating_calculation_logic() -> Tuple[str, bool, str]:
     """
     Test LordFilm rating calculation formula
@@ -277,7 +283,6 @@ def test_rating_calculation_logic() -> Tuple[str, bool, str]:
     finally:
         film_parser.close()
 
-
 def test_film_parser_error_handling() -> Tuple[str, bool, str]:
     """
     Test FilmParser error handling with invalid URL
@@ -305,7 +310,6 @@ def test_film_parser_error_handling() -> Tuple[str, bool, str]:
         return (test_name, False, f"❌ Parser crashed on invalid URL: {type(e).__name__}")
     finally:
         film_parser.close()
-
 
 def run_tests() -> bool:
     """Run all tests and return overall result"""
@@ -373,7 +377,6 @@ def run_tests() -> bool:
     else:
         print("\n❌ TOO MANY FAILURES: Film Parser needs fixes.")
         return False
-
 
 def main():
     """Main entry point"""
