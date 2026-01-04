@@ -71,8 +71,9 @@ class MainParser:
         self.link_parser = None
         self.film_parser = None
         self.session_id = None
-        self.should_stop = False  # Флаг для graceful shutdown
-        self.semaphore = None  # Для ограничения concurrent запросов
+        self.should_stop = False
+        self.semaphore = None
+        self.timeout = SELENIUM_TIMEOUT
 
     async def main(self, mode: ParseMode, task: ParseTask, **kwargs) -> Dict[str, Any]:
         """
@@ -205,8 +206,16 @@ class MainParser:
         # 2. Проверка парсеров
         try:
             # Проверяем, что можем создать парсеры
-            test_link_parser = create_link_parser()
-            test_film_parser = create_film_parser()
+            test_link_parser = create_link_parser(
+                base_url=DEFAULT_URL,
+                timeout=SELENIUM_TIMEOUT,
+                load_delay=3
+            )
+            test_film_parser = create_film_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+            )
 
             # Закрываем тестовые парсеры
             test_link_parser.close()
@@ -426,7 +435,11 @@ class MainParser:
             session.close()
 
         # Инициализация парсера
-        self.film_parser = create_film_parser()
+        self.film_parser = create_film_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+        )
 
         stats = {
             "total_films": total_films,
@@ -501,8 +514,16 @@ class MainParser:
         daily_config = PARSING_SCHEDULES['daily']
 
         # Инициализация парсеров
-        self.link_parser = create_link_parser()
-        self.film_parser = create_film_parser()
+        self.link_parser = create_link_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+        )
+        self.film_parser = create_film_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+        )
 
         stats = {
             "pages_processed": 0,
@@ -597,8 +618,16 @@ class MainParser:
         weekly_config = PARSING_SCHEDULES['weekly']
 
         # Инициализация парсеров
-        self.link_parser = create_link_parser()
-        self.film_parser = create_film_parser()
+        self.link_parser = create_link_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+        )
+        self.film_parser = create_film_parser(
+            base_url=DEFAULT_URL,
+            timeout=self.timeout,
+            load_delay=self.load_delay
+        )
 
         stats = {
             "pages_processed": 0,

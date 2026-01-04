@@ -16,7 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
 
-from src.config.config import DEFAULT_URL, SELENIUM_URL
+from src.config.config import DEFAULT_URL, SELENIUM_URL, SELENIUM_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class LinkParser:
     MAX_RETRY_ATTEMPTS = 3
     RETRY_DELAYS = [2, 4, 8]  # exponential backoff in seconds
 
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, timeout: int = 15, load_delay: int = 3):
         """
         Initialize link parser
 
@@ -39,8 +39,8 @@ class LinkParser:
 
         # Selenium configuration
         self.selenium_url = SELENIUM_URL
-        self.timeout = 10  # seconds
-        self.load_delay = 2  # seconds
+        self.timeout = timeout  # seconds
+        self.load_delay = load_delay  # seconds
 
     def setup_driver(self) -> None:
         """Setup Selenium WebDriver"""
@@ -204,6 +204,14 @@ class LinkParser:
 
 
 # Factory function for easy creation
-def create_link_parser(base_url: str = None) -> LinkParser:
+def create_link_parser(
+    base_url: str = None,
+    timeout: int = SELENIUM_TIMEOUT,
+    load_delay: int = 3
+) -> LinkParser:
     """Create and return a new LinkParser instance"""
-    return LinkParser(base_url=base_url)
+    return LinkParser(
+        base_url=base_url,
+        timeout=timeout,
+        load_delay=load_delay
+    )

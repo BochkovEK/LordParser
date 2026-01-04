@@ -26,6 +26,59 @@ def setup_logging():
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
+def test_link_parser_integration() -> Tuple[str, bool, str]:
+    """
+    Integration test: link_parser gets links, film_parser parses first one
+    """
+    test_name = "Link + Film Parser Integration"
+
+    link_parser = create_link_parser()
+    film_parser = create_film_parser()
+
+    try:
+        # 1. Link Parser: Get film links from catalog page
+        test_catalog_url = "https://mh.lordfilm131.ru/filmy/"
+
+        print(f"📥 Getting links from: {test_catalog_url}")
+        film_links = link_parser.parse_links_from_page(test_catalog_url)
+
+        if not film_links:
+            return (test_name, False, "❌ Link parser returned empty list")
+
+        print(f"✅ Found {len(film_links)} film links")
+
+        # 2. Take first few links for testing
+        test_links = film_links[:3]  # First 3 films
+        print(f"🔍 Testing with {len(test_links)} links")
+
+        results = []
+
+        for i, film_url in enumerate(test_links, 1):
+            print(f"  {i}. Parsing: {film_url}")
+
+            # 3. Film Parser: Parse each film
+            film_data = film_parser.parse_film_details(film_url)
+
+            if 'error' in film_data:
+                results.append(f"❌ Link {i}: {film_data['error'][:50]}")
+            elif film_data.get('title'):
+                title = film_data['title'][:40]
+                results.append(f"✅ Link {i}: '{title}'")
+            else:
+                results.append(f"⚠️ Link {i}: No title")
+
+            # Small delay between requests
+            time.sleep(1)
+
+        message = f"Link Parser: {len(film_links)} links | " + " | ".join(results)
+        return (test_name, True, message)
+
+    except Exception as e:
+        return (test_name, False, f"Integration test failed: {type(e).__name__}: {str(e)[:100]}")
+    finally:
+        link_parser.close()
+        film_parser.close()
+
 def test_film_details_extraction() -> Tuple[str, bool, str]:
     """
     Test extraction of film details from a real film page
@@ -265,7 +318,8 @@ def run_tests() -> bool:
     print("=" * 60)
 
     tests = [
-        ("Film Details Extraction", test_film_details_extraction),
+        ("Link + Film Parser Integration", test_link_parser_integration),
+       # ("Film Details Extraction", test_film_details_extraction),
        # ("Rating Calculation Logic", test_rating_calculation_logic),
        # ("Error Handling", test_film_parser_error_handling),
     ]

@@ -15,7 +15,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-from src.config.config import DEFAULT_URL, SELENIUM_URL
+from src.config.config import DEFAULT_URL, SELENIUM_URL, SELENIUM_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class FilmParser:
     """Parser for extracting film details from film pages"""
 
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, timeout: int = 15, load_delay: int = 3):
         """
         Initialize film parser
 
@@ -35,8 +35,8 @@ class FilmParser:
 
         # Selenium configuration
         self.selenium_url = SELENIUM_URL
-        self.timeout = 15  # seconds
-        self.load_delay = 3  # seconds for dynamic content
+        self.timeout = timeout  # seconds
+        self.load_delay = load_delay  # seconds for dynamic content
 
     def setup_driver(self) -> None:
         """Setup Selenium WebDriver"""
@@ -294,6 +294,14 @@ class FilmParser:
 
 
 # Factory function
-def create_film_parser(base_url: str = None) -> FilmParser:
+def create_film_parser(
+    base_url: str = None,
+    timeout: int = SELENIUM_TIMEOUT,
+    load_delay: int = 3
+) -> FilmParser:
     """Create and return a new FilmParser instance"""
-    return FilmParser(base_url=base_url)
+    return FilmParser(
+        base_url=base_url,
+        timeout=timeout,
+        load_delay=load_delay
+    )
