@@ -70,7 +70,9 @@ class URLGenerator:
 
     def _generate_main_catalog(self, pattern: str, pages: Union[int, str]) -> Generator[str, None, None]:
         """Generate URLs for main catalog"""
-        if pages == 'all':
+        if pages is None:
+            pages = 1
+        elif pages == 'all':
             pages = self.default_pages
 
         for page in range(1, int(pages) + 1):
