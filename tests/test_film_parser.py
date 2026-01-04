@@ -13,6 +13,7 @@ from typing import Tuple, List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.parser.film_parser import create_film_parser
+from src.parser.link_parser import create_link_parser
 from src.config.config import DEFAULT_URL, SELENIUM_URL, SELENIUM_TIMEOUT
 
 
