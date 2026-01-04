@@ -7,6 +7,7 @@ Tests detailed film information extraction and rating calculation
 import sys
 import os
 import logging
+import time
 from typing import Tuple, List, Dict, Any
 
 # Add project root to Python path
