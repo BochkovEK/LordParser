@@ -26,66 +26,70 @@ def setup_logging():
     logging.getLogger('selenium').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
 
-def test_link_parser_integration() -> Tuple[str, bool, str]:
-    """
-    Integration test: link_parser gets links, film_parser parses first one
-    """
-    test_name = "Link + Film Parser Integration"
 
-    link_parser = create_link_parser(
-                base_url=DEFAULT_URL,
-                timeout=SELENIUM_TIMEOUT,
-                load_delay=3
-            )
-    film_parser = create_film_parser(
-                base_url=DEFAULT_URL,
-                timeout=SELENIUM_TIMEOUT,
-                load_delay=3
-            )
+def test_integration_chain() -> Tuple[str, bool, str]:
+    """
+    Test complete chain: URLGenerator → LinkParser → FilmParser
+    """
+    test_name = "Integration Chain"
 
     try:
-        # 1. Link Parser: Get film links from catalog page
-        test_catalog_url = SELENIUM_URL
-
-        print(f"📥 Getting links from: {test_catalog_url}")
-        film_links = link_parser.parse_links_from_page(test_catalog_url)
-
-        if not film_links:
-            return (test_name, False, "❌ Link parser returned empty list")
-
-        print(f"✅ Found {len(film_links)} film links")
-
-        # 2. Take first few links for testing
-        test_links = film_links[:3]  # First 3 films
-        print(f"🔍 Testing with {len(test_links)} links")
+        # 1. Initialize components
+        url_gen = URLGenerator()
+        link_parser = create_link_parser(SELENIUM_TIMEOUT, load_delay=3)
+        film_parser = create_film_parser(SELENIUM_TIMEOUT, load_delay=3)
 
         results = []
 
-        for i, film_url in enumerate(test_links, 1):
-            print(f"  {i}. Parsing: {film_url}")
+        try:
+            # 2. Generate catalog URLs (1 page only for test)
+            catalog_urls = []
+            for i, url in enumerate(url_gen.generate_from_template('main_catalog', pages=1)):
+                catalog_urls.append(url)
+                if i >= 0:  # Just first URL
+                    break
 
-            # 3. Film Parser: Parse each film
-            film_data = film_parser.parse_film_details(film_url)
+            if not catalog_urls:
+                return (test_name, False, "❌ URLGenerator returned no URLs")
 
-            if 'error' in film_data:
-                results.append(f"❌ Link {i}: {film_data['error'][:50]}")
-            elif film_data.get('title'):
-                title = film_data['title'][:40]
-                results.append(f"✅ Link {i}: '{title}'")
+            # 3. Get film links from first catalog page
+            catalog_url = catalog_urls[0]
+            film_links = link_parser.parse_links_from_page(catalog_url)
+
+            if not film_links:
+                return (test_name, False, f"❌ No film links from {catalog_url}")
+
+            results.append(f"URLs: {len(catalog_urls)}")
+            results.append(f"Film links: {len(film_links)}")
+
+            # 4. Parse first 2 films (limited for speed)
+            parsed_count = 0
+            for film_url in film_links[:2]:
+                film_data = film_parser.parse_film_details(film_url)
+
+                if 'error' in film_data:
+                    results.append(f"❌ Film error: {film_data['error'][:30]}")
+                else:
+                    title = film_data.get('title', 'Unknown')[:30]
+                    results.append(f"✅ Film: '{title}'")
+                    parsed_count += 1
+
+                time.sleep(1)  # Delay
+
+            # 5. Evaluate results
+            if parsed_count > 0:
+                message = f"Chain works: {results[0]}, {results[1]}, Parsed {parsed_count}/2 films"
+                return (test_name, True, f"✅ {message}")
             else:
-                results.append(f"⚠️ Link {i}: No title")
+                return (test_name, False, f"❌ Chain broken: {' | '.join(results)}")
 
-            # Small delay between requests
-            time.sleep(1)
-
-        message = f"Link Parser: {len(film_links)} links | " + " | ".join(results)
-        return (test_name, True, message)
+        finally:
+            # Cleanup
+            link_parser.close()
+            film_parser.close()
 
     except Exception as e:
-        return (test_name, False, f"Integration test failed: {type(e).__name__}: {str(e)[:100]}")
-    finally:
-        link_parser.close()
-        film_parser.close()
+        return (test_name, False, f"❌ Integration test crashed: {type(e).__name__}: {str(e)[:100]}")
 
 def test_film_details_extraction() -> Tuple[str, bool, str]:
     """
@@ -323,7 +327,7 @@ def run_tests() -> bool:
     print("=" * 60)
 
     tests = [
-        ("Link + Film Parser Integration", test_link_parser_integration),
+        ("Integration Chain", test_integration_chain),
        # ("Film Details Extraction", test_film_details_extraction),
        # ("Rating Calculation Logic", test_rating_calculation_logic),
        # ("Error Handling", test_film_parser_error_handling),

@@ -10,11 +10,36 @@ from src.config.config import DEFAULT_URL, DEFAULT_CATEGORY, YEAR_RANGE, PARSE_P
 class URLGenerator:
     """Generates URLs for parsing catalog pages"""
 
-    def __init__(self, base_url: str = None):
+    def __init__(
+        self,
+        base_url: str = None,
+        category: str = None,
+        start_year: int = None,
+        end_year: int = None,
+        default_pages: int = None
+    ):
+        """
+        Initialize URL generator with configurable parameters
+
+        Args:
+            base_url: Base site URL (default: DEFAULT_URL from config)
+            category: Content category - filmy/serialy/multfilmy (default: DEFAULT_CATEGORY)
+            start_year: Starting year for year-based parsing (default: YEAR_RANGE[0])
+            end_year: Ending year for year-based parsing (default: YEAR_RANGE[1])
+            default_pages: Default number of pages to parse (default: PARSE_PAGES)
+        """
         self.base_url = base_url or DEFAULT_URL
-        self.category = DEFAULT_CATEGORY
-        self.start_year, self.end_year = YEAR_RANGE
-        self.default_pages = PARSE_PAGES
+        self.category = category or DEFAULT_CATEGORY
+        self.start_year = start_year or YEAR_RANGE[0]
+        self.end_year = end_year or YEAR_RANGE[1]
+        self.default_pages = default_pages or PARSE_PAGES
+
+        # Validate inputs
+        if self.start_year > self.end_year:
+            self.start_year, self.end_year = self.end_year, self.start_year
+
+        if self.default_pages < 1:
+            self.default_pages = 1
 
     def generate_from_template(self,
                              template_key: str,
