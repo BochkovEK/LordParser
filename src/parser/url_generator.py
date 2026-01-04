@@ -92,14 +92,19 @@ class URLGenerator:
                 yield pattern.format(year=year, page=page)
 
 
-if __name__ == "__main__":
-    # Test the generator
-    generator = URLGenerator()
-
-    print("🔗 URL Generator Test:")
-
-    # Test main catalog
-    main_urls = list(generator.generate_from_template('main_catalog', pages=2))
-    print(f"Main catalog URLs (2 pages): {len(main_urls)}")
-    for url in main_urls[:2]:
-        print(f"  {url}")
+# Factory function for easy creation
+def create_url_generator(
+    base_url: str = None,
+    category: str = None,
+    start_year: int = None,
+    end_year: int = None,
+    default_pages: int = None
+) -> URLGenerator:
+    """Factory function for URLGenerator"""
+    return URLGenerator(
+        base_url=base_url,
+        category=category,
+        start_year=start_year,
+        end_year=end_year,
+        default_pages=default_pages
+    )

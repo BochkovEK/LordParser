@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.parser.film_parser import create_film_parser
 from src.parser.link_parser import create_link_parser
+from src.parser.url_generator import create_url_generator
 from src.config.config import DEFAULT_URL, SELENIUM_URL, SELENIUM_TIMEOUT
 
 
@@ -35,7 +36,7 @@ def test_integration_chain() -> Tuple[str, bool, str]:
 
     try:
         # 1. Initialize components
-        url_gen = URLGenerator()
+        url_gen = create_url_generator()
         link_parser = create_link_parser(SELENIUM_TIMEOUT, load_delay=3)
         film_parser = create_film_parser(SELENIUM_TIMEOUT, load_delay=3)
 
