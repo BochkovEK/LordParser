@@ -4,7 +4,7 @@ Test script for Film Parser module
 Tests detailed film information extraction and rating calculation
 """
 
-import sys
+import syss
 import os
 import logging
 import time
